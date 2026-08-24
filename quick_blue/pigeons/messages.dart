@@ -122,6 +122,7 @@ abstract class QuickBlueApi {
   void connect(String deviceId);
   void disconnect(String deviceId);
   PlatformBondState bondState(String deviceId);
+  void startPairing(String deviceId);
   @async
   void pair(String deviceId);
   @async

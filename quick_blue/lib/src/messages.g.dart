@@ -1338,6 +1338,24 @@ class QuickBlueApi {
     return pigeonVar_replyValue! as PlatformBondState;
   }
 
+  Future<void> startPairing(String deviceId) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.quick_blue.QuickBlueApi.startPairing$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[deviceId]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   Future<void> pair(String deviceId) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.quick_blue.QuickBlueApi.pair$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

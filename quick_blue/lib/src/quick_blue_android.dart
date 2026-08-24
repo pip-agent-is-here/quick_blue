@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 
+import 'android_security_recovery.dart';
 import 'messages.g.dart' as messages;
 
 class QuickBlueAndroid extends QuickBluePlatform {
@@ -144,6 +145,19 @@ class QuickBlueAndroid extends QuickBluePlatform {
     _ensureInitialized();
 
     return _api.pair(deviceId);
+  }
+
+  @override
+  Future<QuickBlueSecurityRecoveryResult> performSecurityRecovery(
+    String deviceId,
+    QuickBlueSecurityException error,
+  ) {
+    _ensureInitialized();
+    return AndroidSecurityRecovery(
+      stateChanges: bondStateStream,
+      readState: bondState,
+      startPairing: _api.startPairing,
+    ).perform(deviceId);
   }
 
   @override

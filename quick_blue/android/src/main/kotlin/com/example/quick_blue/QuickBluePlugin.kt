@@ -566,6 +566,31 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         return remoteDevice(deviceId).bondState.toPlatformBondState()
     }
 
+    override fun startPairing(deviceId: String) {
+        ensureBluetoothConnectPermission()
+        val device = remoteDevice(deviceId)
+        if (device.bondState != BluetoothDevice.BOND_NONE) {
+            return
+        }
+
+        val started = try {
+            device.createBond()
+        } catch (error: Throwable) {
+            throw FlutterError(
+                "BondFailed",
+                error.message ?: "Failed to start pairing for $deviceId",
+                null
+            )
+        }
+        if (!started) {
+            throw FlutterError(
+                "BondFailed",
+                "Failed to start pairing for $deviceId",
+                null
+            )
+        }
+    }
+
     override fun pair(deviceId: String, callback: (Result<Unit>) -> Unit) {
         val device = try {
             ensureBluetoothConnectPermission()

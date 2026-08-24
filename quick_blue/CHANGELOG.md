@@ -2,6 +2,10 @@
 
 ### Fixed
 
+- Prevent a duplicate Android pairing request after a protected GATT operation
+  starts an implicit bond. Security recovery now observes the bond state before
+  it starts an explicit bond.
+
 - Wait for Android's native MTU callback and return the negotiated value instead
   of completing when the request is only enqueued, and fail a pending request
   if its GATT disconnects.

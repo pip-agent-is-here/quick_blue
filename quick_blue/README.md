@@ -366,7 +366,8 @@ updates or manage the notification lifetime separately.
 
 ### Pairing
 
-Android and Linux expose app-initiated pairing:
+Android and Linux expose app-initiated pairing. Use `pair()` when a workflow
+must request pairing independently from a protected GATT operation:
 
 ```dart
 final device = QuickBlue.device(deviceId);
@@ -375,6 +376,11 @@ if (state != BluetoothBondState.bonded) {
   await device.pair();
 }
 ```
+
+Android applications do not need to call `pair()` before a protected GATT
+operation. QuickBlue first observes Android's implicit bond request. QuickBlue
+starts an explicit bond only if Android stays unbonded during the bounded
+observation period.
 
 iOS and macOS prompt automatically when an encrypted characteristic requires
 pairing. Windows app-initiated pairing is not currently implemented.
@@ -488,6 +494,11 @@ QuickBlue coordinates one recovery per device, pairs an unbonded device when
 the platform supports it, and retries the rejected operation once after
 successful recovery. This retry is safe for acknowledged writes because a
 security response means the peer rejected the write before applying it.
+
+On Android, the rejected operation can start an implicit bond before Android
+reports `BluetoothBondState.bonding`. QuickBlue observes that transition for a
+short bound before it starts an explicit bond. This policy prevents a second
+`createBond()` call while Android starts or processes the implicit bond.
 
 If automatic recovery cannot proceed, QuickBlue exposes
 `QuickBlueSecurityException`. Its `reason` identifies authentication,

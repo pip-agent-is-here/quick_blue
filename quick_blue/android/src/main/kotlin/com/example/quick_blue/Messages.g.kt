@@ -1266,6 +1266,7 @@ interface QuickBlueApi {
   fun connect(deviceId: String)
   fun disconnect(deviceId: String)
   fun bondState(deviceId: String): PlatformBondState
+  fun startPairing(deviceId: String)
   fun pair(deviceId: String, callback: (Result<Unit>) -> Unit)
   fun isCompanionAssociationSupported(callback: (Result<Boolean>) -> Unit)
   fun companionAssociate(request: PlatformCompanionAssociationRequest, callback: (Result<PlatformCompanionAssociation?>) -> Unit)
@@ -1418,6 +1419,24 @@ interface QuickBlueApi {
             val deviceIdArg = args[0] as String
             val wrapped: List<Any?> = try {
               listOf(api.bondState(deviceIdArg))
+            } catch (exception: Throwable) {
+              MessagesPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.quick_blue.QuickBlueApi.startPairing$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val deviceIdArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              api.startPairing(deviceIdArg)
+              listOf(null)
             } catch (exception: Throwable) {
               MessagesPigeonUtils.wrapError(exception)
             }

@@ -4,6 +4,8 @@ import 'package:quick_blue/quick_blue.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 import 'package:quick_blue/src/messages.g.dart' as messages;
 
+import 'test_support/android_bond_harness.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -16,6 +18,7 @@ void main() {
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.connect',
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.disconnect',
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.bondState',
+    'dev.flutter.pigeon.quick_blue.QuickBlueApi.startPairing',
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.pair',
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.isCompanionAssociationSupported',
     'dev.flutter.pigeon.quick_blue.QuickBlueApi.companionAssociate',
@@ -468,6 +471,161 @@ void main() {
           ),
         ]),
       );
+    });
+
+    test('uses an implicit bond and retries the operation once', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.notBonded,
+      )..install();
+      final platform = QuickBlueAndroid();
+      var operationCalls = 0;
+
+      final operation = platform.runWithSecurityRecovery<void>(
+        'device-a',
+        () async {
+          operationCalls += 1;
+          if (operationCalls == 1) {
+            throw _securityError;
+          }
+        },
+      );
+      await harness.waitForBondStateCalls(2);
+
+      await harness.emit(messages.PlatformBondState.bonding);
+      expect(harness.startPairingCalls, 0);
+      await harness.emit(messages.PlatformBondState.bonded);
+
+      await operation;
+      expect(operationCalls, 2);
+      expect(harness.startPairingCalls, 0);
+      expect(harness.listenCalls, 1);
+      expect(harness.cancelCalls, 1);
+    });
+
+    test('starts one explicit bond after the observation bound', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.notBonded,
+      )..install();
+      final platform = QuickBlueAndroid();
+
+      final recovery = platform.performSecurityRecovery(
+        'device-a',
+        _securityError,
+      );
+      await harness.startPairingCalled;
+
+      expect(harness.startPairingCalls, 1);
+      await harness.emit(messages.PlatformBondState.bonding);
+      await harness.emit(messages.PlatformBondState.bonded);
+
+      expect(await recovery, QuickBlueSecurityRecoveryResult.recovered);
+      expect(harness.startPairingCalls, 1);
+      expect(harness.cancelCalls, 1);
+    });
+
+    test('waits for an existing bond operation', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.bonding,
+      )..install();
+      final platform = QuickBlueAndroid();
+
+      final recovery = platform.performSecurityRecovery(
+        'device-a',
+        _securityError,
+      );
+      await harness.waitForBondStateCalls(2);
+      await harness.emit(messages.PlatformBondState.bonded);
+
+      expect(await recovery, QuickBlueSecurityRecoveryResult.recovered);
+      expect(harness.startPairingCalls, 0);
+      expect(harness.cancelCalls, 1);
+    });
+
+    test('keeps stale-bond recovery as user action', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.bonded,
+      )..install();
+      final platform = QuickBlueAndroid();
+      var operationCalls = 0;
+
+      await expectLater(
+        platform.runWithSecurityRecovery<void>('device-a', () async {
+          operationCalls += 1;
+          throw _securityError;
+        }),
+        throwsA(
+          isA<QuickBlueSecurityException>().having(
+            (error) => error.recoveryResult,
+            'recoveryResult',
+            QuickBlueSecurityRecoveryResult.userActionRequired,
+          ),
+        ),
+      );
+
+      expect(operationCalls, 1);
+      expect(harness.startPairingCalls, 0);
+      expect(harness.cancelCalls, 1);
+    });
+
+    test('coalesces concurrent Android security recovery', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.notBonded,
+      )..install();
+      final platform = QuickBlueAndroid();
+      var firstCalls = 0;
+      var secondCalls = 0;
+
+      final first = platform.runWithSecurityRecovery<void>(
+        'device-a',
+        () async {
+          firstCalls += 1;
+          if (firstCalls == 1) {
+            throw _securityError;
+          }
+        },
+      );
+      final second = platform.runWithSecurityRecovery<void>(
+        'device-a',
+        () async {
+          secondCalls += 1;
+          if (secondCalls == 1) {
+            throw _securityError;
+          }
+        },
+      );
+      await harness.waitForBondStateCalls(2);
+      await harness.emit(messages.PlatformBondState.bonding);
+      await harness.emit(messages.PlatformBondState.bonded);
+
+      await Future.wait(<Future<void>>[first, second]);
+      expect(firstCalls, 2);
+      expect(secondCalls, 2);
+      expect(harness.listenCalls, 1);
+      expect(harness.cancelCalls, 1);
+      expect(harness.startPairingCalls, 0);
+    });
+
+    test('a failed explicit bond cancels its state subscription', () async {
+      final harness = AndroidBondHarness(
+        initialState: messages.PlatformBondState.notBonded,
+      )..install();
+      final platform = QuickBlueAndroid();
+
+      final recovery = platform.performSecurityRecovery(
+        'device-a',
+        _securityError,
+      );
+      await harness.startPairingCalled;
+      await harness.emit(messages.PlatformBondState.bonding);
+      await harness.emit(messages.PlatformBondState.notBonded);
+
+      expect(
+        await recovery,
+        QuickBlueSecurityRecoveryResult.userActionRequired,
+      );
+      expect(harness.startPairingCalls, 1);
+      expect(harness.listenCalls, 1);
+      expect(harness.cancelCalls, 1);
     });
 
     test('maps scan result events', () async {
@@ -1084,3 +1242,14 @@ Future<void> _sendFlutterApiMessage(String method, Object argument) async {
       );
   await pumpEventQueue();
 }
+
+const _securityError = QuickBlueSecurityException(
+  reason: QuickBlueSecurityErrorReason.insufficientAuthentication,
+  nativeDomain: 'android.bluetooth.BluetoothGatt',
+  nativeCode: 5,
+  operation: 'writeValue',
+  deviceId: 'device-a',
+  serviceId: 'service-a',
+  characteristicId: 'characteristic-a',
+  message: 'Authentication required.',
+);
