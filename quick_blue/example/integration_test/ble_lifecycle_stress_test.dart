@@ -31,123 +31,121 @@ const _secondNamePattern = String.fromEnvironment(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'repeated BLE lifecycle and two-device isolation stress',
-    (_) async {
-      if (!_supportsBleStress(defaultTargetPlatform)) {
-        markTestSkipped(
-          'This stress test targets platforms supported by quick_blue.',
-        );
-        return;
-      }
-      if (_firstNamePattern.isEmpty) {
-        markTestSkipped(
-          'Set QUICK_BLUE_STRESS_FIRST_NAME_PATTERN to a known connectable '
-          'device with a readable characteristic.',
-        );
-        return;
-      }
-      if (!await _waitForBluetoothAvailable()) {
-        fail(
-          'Bluetooth is not powered on, unavailable, or permission was denied.',
-        );
-      }
+  testWidgets('repeated BLE lifecycle and two-device isolation stress', (
+    _,
+  ) async {
+    if (!_supportsBleStress(defaultTargetPlatform)) {
+      markTestSkipped(
+        'This stress test targets platforms supported by quick_blue.',
+      );
+      return;
+    }
+    if (_firstNamePattern.isEmpty) {
+      markTestSkipped(
+        'Set QUICK_BLUE_STRESS_FIRST_NAME_PATTERN to a known connectable '
+        'device with a readable characteristic.',
+      );
+      return;
+    }
+    if (!await _waitForBluetoothAvailable()) {
+      fail(
+        'Bluetooth is not powered on, unavailable, or permission was denied.',
+      );
+    }
 
-      final targets = await _scanForTargets();
-      final first = QuickBlue.device(targets.first.deviceId);
-      final second = targets.second == null
-          ? null
-          : QuickBlue.device(targets.second!.deviceId);
-      addTearDown(() => _bestEffortDisconnect(first));
-      if (second != null) {
-        addTearDown(() => _bestEffortDisconnect(second));
-      }
+    final targets = await _scanForTargets();
+    final first = QuickBlue.device(targets.first.deviceId);
+    final second = targets.second == null
+        ? null
+        : QuickBlue.device(targets.second!.deviceId);
+    addTearDown(() => _bestEffortDisconnect(first));
+    if (second != null) {
+      addTearDown(() => _bestEffortDisconnect(second));
+    }
 
-      final iterations = _positive(_iterations, 3);
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        final rescanned = await _scanForTargets();
-        expect(rescanned.first.deviceId, targets.first.deviceId);
-        expect(rescanned.second?.deviceId, targets.second?.deviceId);
+    final iterations = _positive(_iterations, 3);
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      final rescanned = await _scanForTargets();
+      expect(rescanned.first.deviceId, targets.first.deviceId);
+      expect(rescanned.second?.deviceId, targets.second?.deviceId);
+      debugPrint(
+        'BLE lifecycle stress: completed scan restart '
+        '$iteration/$iterations.',
+      );
+    }
+
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      await _exerciseOverlappingConnect(first);
+      await _exerciseConnectDisconnectRace(first);
+      debugPrint(
+        'BLE lifecycle stress: completed connection race '
+        '$iteration/$iterations for ${first.deviceId}.',
+      );
+    }
+
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      final services = await _exerciseCleanLifecycle(first);
+      if (iteration == 1) {
         debugPrint(
-          'BLE lifecycle stress: completed scan restart '
+          'BLE lifecycle stress: ${first.deviceId} GATT services: $services',
+          wrapWidth: 1024,
+        );
+      }
+      debugPrint(
+        'BLE lifecycle stress: completed clean iteration '
+        '$iteration/$iterations for ${first.deviceId}.',
+      );
+    }
+
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      final failedOperations = await _exerciseGattDisconnectRace(first);
+      debugPrint(
+        'BLE lifecycle stress: GATT/disconnect iteration '
+        '$iteration/$iterations settled with $failedOperations cancelled '
+        'operation(s) for ${first.deviceId}.',
+      );
+    }
+
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      final rejectedWrites = await _exerciseOversizedWriteFailures(first);
+      debugPrint(
+        'BLE lifecycle stress: oversized-write iteration '
+        '$iteration/$iterations rejected $rejectedWrites operation(s) for '
+        '${first.deviceId}.',
+      );
+    }
+
+    var cancelledDiscoveries = 0;
+    for (var iteration = 1; iteration <= iterations; iteration += 1) {
+      final outcome = await _exerciseDiscoveryDisconnectRace(first);
+      if (outcome == _DiscoveryRaceOutcome.cancelled) {
+        cancelledDiscoveries += 1;
+      }
+      debugPrint(
+        'BLE lifecycle stress: discovery/disconnect iteration '
+        '$iteration/$iterations ${outcome.name} for ${first.deviceId}.',
+      );
+    }
+
+    if (second != null) {
+      for (var iteration = 1; iteration <= iterations; iteration += 1) {
+        await _exerciseScanDuringConnection(first, second);
+        debugPrint(
+          'BLE lifecycle stress: completed shared scan during connection '
           '$iteration/$iterations.',
         );
       }
+      await _exerciseTwoDeviceIsolation(first, second);
+    }
 
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        await _exerciseOverlappingConnect(first);
-        await _exerciseConnectDisconnectRace(first);
-        debugPrint(
-          'BLE lifecycle stress: completed connection race '
-          '$iteration/$iterations for ${first.deviceId}.',
-        );
-      }
-
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        final services = await _exerciseCleanLifecycle(first);
-        if (iteration == 1) {
-          debugPrint(
-            'BLE lifecycle stress: ${first.deviceId} GATT services: $services',
-            wrapWidth: 1024,
-          );
-        }
-        debugPrint(
-          'BLE lifecycle stress: completed clean iteration '
-          '$iteration/$iterations for ${first.deviceId}.',
-        );
-      }
-
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        final failedOperations = await _exerciseGattDisconnectRace(first);
-        debugPrint(
-          'BLE lifecycle stress: GATT/disconnect iteration '
-          '$iteration/$iterations settled with $failedOperations cancelled '
-          'operation(s) for ${first.deviceId}.',
-        );
-      }
-
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        final rejectedWrites = await _exerciseOversizedWriteFailures(first);
-        debugPrint(
-          'BLE lifecycle stress: oversized-write iteration '
-          '$iteration/$iterations rejected $rejectedWrites operation(s) for '
-          '${first.deviceId}.',
-        );
-      }
-
-      var cancelledDiscoveries = 0;
-      for (var iteration = 1; iteration <= iterations; iteration += 1) {
-        final outcome = await _exerciseDiscoveryDisconnectRace(first);
-        if (outcome == _DiscoveryRaceOutcome.cancelled) {
-          cancelledDiscoveries += 1;
-        }
-        debugPrint(
-          'BLE lifecycle stress: discovery/disconnect iteration '
-          '$iteration/$iterations ${outcome.name} for ${first.deviceId}.',
-        );
-      }
-
-      if (second != null) {
-        for (var iteration = 1; iteration <= iterations; iteration += 1) {
-          await _exerciseScanDuringConnection(first, second);
-          debugPrint(
-            'BLE lifecycle stress: completed shared scan during connection '
-            '$iteration/$iterations.',
-          );
-        }
-        await _exerciseTwoDeviceIsolation(first, second);
-      }
-
-      debugPrint(
-        'BLE lifecycle stress completed: first=${targets.first.name} '
-        '(${targets.first.deviceId}), second='
-        '${targets.second?.name ?? '<not configured>'} '
-        '(${targets.second?.deviceId ?? '<not configured>'}), '
-        'iterations=$iterations, cancelledDiscoveries=$cancelledDiscoveries.',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 5)),
-  );
+    debugPrint(
+      'BLE lifecycle stress completed: first=${targets.first.name} '
+      '(${targets.first.deviceId}), second='
+      '${targets.second?.name ?? '<not configured>'} '
+      '(${targets.second?.deviceId ?? '<not configured>'}), '
+      'iterations=$iterations, cancelledDiscoveries=$cancelledDiscoveries.',
+    );
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }
 
 bool _supportsBleStress(TargetPlatform platform) {

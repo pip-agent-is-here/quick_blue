@@ -101,176 +101,172 @@ const _useIndications = bool.fromEnvironment(
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'BLE characteristic notification and read benchmark',
-    (_) async {
-      if (!_supportsBleBenchmark(defaultTargetPlatform)) {
-        markTestSkipped(
-          'This benchmark targets platforms supported by quick_blue.',
-        );
-        return;
-      }
-      if (_notifyServiceUuid.isEmpty || _notifyCharacteristicUuid.isEmpty) {
-        markTestSkipped(
-          'Set QUICK_BLUE_BENCHMARK_NOTIFY_SERVICE_UUID and '
-          'QUICK_BLUE_BENCHMARK_NOTIFY_CHARACTERISTIC_UUID for a known '
-          'notifying characteristic.',
-        );
-        return;
-      }
-      final hasPartialReadTarget =
-          (_readServiceUuid.isEmpty && _readCharacteristicUuid.isNotEmpty) ||
-          (_readServiceUuid.isNotEmpty && _readCharacteristicUuid.isEmpty);
-      if (hasPartialReadTarget) {
-        markTestSkipped(
-          'Set both QUICK_BLUE_BENCHMARK_READ_SERVICE_UUID and '
-          'QUICK_BLUE_BENCHMARK_READ_CHARACTERISTIC_UUID, or omit both to '
-          'read the notifying characteristic when it is readable.',
-        );
-        return;
-      }
-      final hasPartialNotifyWriteTarget =
-          (_notifyWriteServiceUuid.isEmpty &&
-              _notifyWriteCharacteristicUuid.isNotEmpty) ||
-          (_notifyWriteServiceUuid.isNotEmpty &&
-              _notifyWriteCharacteristicUuid.isEmpty);
-      if (hasPartialNotifyWriteTarget) {
-        markTestSkipped(
-          'Set both QUICK_BLUE_BENCHMARK_NOTIFY_WRITE_SERVICE_UUID and '
-          'QUICK_BLUE_BENCHMARK_NOTIFY_WRITE_CHARACTERISTIC_UUID, or omit '
-          'both to write the notifying characteristic when it is writable.',
-        );
-        return;
-      }
-      if (_targetDeviceId.isEmpty && _targetNamePattern.isEmpty) {
-        markTestSkipped(
-          'Set QUICK_BLUE_BENCHMARK_DEVICE_ID or '
-          'QUICK_BLUE_BENCHMARK_NAME_PATTERN to select a benchmark device.',
-        );
-        return;
-      }
-
-      final bluetoothAvailable = await _waitForBluetoothAvailable();
-      if (!bluetoothAvailable) {
-        fail(
-          'Bluetooth is not powered on, unavailable, or permission was denied.',
-        );
-      }
-
-      final target = await _benchmarkTarget();
-      if (target == null) {
-        markTestSkipped('No BLE device matched the benchmark target.');
-        return;
-      }
-
-      final device = target.device;
-      final connectedByBenchmark = target.shouldDisconnect;
-      final result = <String, Object?>{
-        'target': target.description,
-        'platform': defaultTargetPlatform.name,
-        'notifyServiceUuid': _notifyServiceUuid,
-        'notifyCharacteristicUuid': _notifyCharacteristicUuid,
-        'notificationDurationSeconds': _durationSeconds,
-      };
-
-      try {
-        if (target.shouldConnect) {
-          await device.connect().timeout(_seconds(_connectTimeoutSeconds, 15));
-        }
-
-        final services = await device.discoverServices().timeout(
-          _seconds(_serviceTimeoutSeconds, 15),
-        );
-        final notifyInfo = _findCharacteristic(
-          services,
-          serviceUuid: _notifyServiceUuid,
-          characteristicUuid: _notifyCharacteristicUuid,
-        );
-        if (notifyInfo == null || !notifyInfo.info.canSubscribe) {
-          fail(
-            'Benchmark characteristic $_notifyServiceUuid/'
-            '$_notifyCharacteristicUuid was not discovered or does not support '
-            'notify/indicate.',
-          );
-        }
-
-        _ResolvedCharacteristic? notifyWriteTarget;
-        Uint8List? notifyWriteCommand;
-        if (_notifyWriteCommandHex.trim().isNotEmpty) {
-          notifyWriteCommand = _hexBytes(_notifyWriteCommandHex);
-          notifyWriteTarget = _notifyWriteTarget(services, notifyInfo);
-          if (notifyWriteTarget == null) {
-            fail(
-              'Notify-write benchmark characteristic '
-              '$_notifyWriteServiceUuid/$_notifyWriteCharacteristicUuid was '
-              'not discovered.',
-            );
-          }
-          if (!notifyWriteTarget.info.canWrite) {
-            fail(
-              'Notify-write benchmark characteristic '
-              '${notifyWriteTarget.service.uuid}/${notifyWriteTarget.info.uuid} '
-              'does not support writes.',
-            );
-          }
-          result['notifyWriteServiceUuid'] = notifyWriteTarget.service.uuid;
-          result['notifyWriteCharacteristicUuid'] = notifyWriteTarget.info.uuid;
-          result['notifyWriteCommandHex'] = _hex(notifyWriteCommand);
-          result['notificationMode'] = 'writeCommand';
-        } else {
-          result['notificationMode'] = 'passiveDuration';
-        }
-
-        final notifyResult = await _measureNotifications(
-          device: device,
-          serviceUuid: notifyInfo.service.uuid,
-          characteristicUuid: notifyInfo.info.uuid,
-          writeTarget: notifyWriteTarget,
-          writeCommand: notifyWriteCommand,
-        );
-        result['notifications'] = notifyResult.toJson();
-
-        final readTarget = _readTarget(services, notifyInfo);
-        final hasExplicitReadTarget =
-            _readServiceUuid.isNotEmpty && _readCharacteristicUuid.isNotEmpty;
-        if (readTarget == null && hasExplicitReadTarget) {
-          fail(
-            'Read benchmark characteristic $_readServiceUuid/'
-            '$_readCharacteristicUuid was not discovered.',
-          );
-        }
-        if (readTarget == null) {
-          result['reads'] = <String, Object?>{
-            'skipped': true,
-            'reason':
-                'No readable benchmark characteristic was configured or '
-                'available on the notifying characteristic.',
-          };
-        } else {
-          result['readServiceUuid'] = readTarget.service.uuid;
-          result['readCharacteristicUuid'] = readTarget.info.uuid;
-          result['reads'] = (await _measureReads(
-            device: device,
-            serviceUuid: readTarget.service.uuid,
-            characteristicUuid: readTarget.info.uuid,
-          )).toJson();
-        }
-      } finally {
-        if (connectedByBenchmark) {
-          await _bestEffortDisconnect(device);
-        }
-      }
-
-      binding.reportData = result;
-      debugPrint(
-        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-          'quickBlueBleCharacteristicBenchmark': result,
-        }),
-        wrapWidth: 1024,
+  testWidgets('BLE characteristic notification and read benchmark', (_) async {
+    if (!_supportsBleBenchmark(defaultTargetPlatform)) {
+      markTestSkipped(
+        'This benchmark targets platforms supported by quick_blue.',
       );
-    },
-    timeout: Timeout(_seconds(_durationSeconds + 180, 210)),
-  );
+      return;
+    }
+    if (_notifyServiceUuid.isEmpty || _notifyCharacteristicUuid.isEmpty) {
+      markTestSkipped(
+        'Set QUICK_BLUE_BENCHMARK_NOTIFY_SERVICE_UUID and '
+        'QUICK_BLUE_BENCHMARK_NOTIFY_CHARACTERISTIC_UUID for a known '
+        'notifying characteristic.',
+      );
+      return;
+    }
+    final hasPartialReadTarget =
+        (_readServiceUuid.isEmpty && _readCharacteristicUuid.isNotEmpty) ||
+        (_readServiceUuid.isNotEmpty && _readCharacteristicUuid.isEmpty);
+    if (hasPartialReadTarget) {
+      markTestSkipped(
+        'Set both QUICK_BLUE_BENCHMARK_READ_SERVICE_UUID and '
+        'QUICK_BLUE_BENCHMARK_READ_CHARACTERISTIC_UUID, or omit both to '
+        'read the notifying characteristic when it is readable.',
+      );
+      return;
+    }
+    final hasPartialNotifyWriteTarget =
+        (_notifyWriteServiceUuid.isEmpty &&
+            _notifyWriteCharacteristicUuid.isNotEmpty) ||
+        (_notifyWriteServiceUuid.isNotEmpty &&
+            _notifyWriteCharacteristicUuid.isEmpty);
+    if (hasPartialNotifyWriteTarget) {
+      markTestSkipped(
+        'Set both QUICK_BLUE_BENCHMARK_NOTIFY_WRITE_SERVICE_UUID and '
+        'QUICK_BLUE_BENCHMARK_NOTIFY_WRITE_CHARACTERISTIC_UUID, or omit '
+        'both to write the notifying characteristic when it is writable.',
+      );
+      return;
+    }
+    if (_targetDeviceId.isEmpty && _targetNamePattern.isEmpty) {
+      markTestSkipped(
+        'Set QUICK_BLUE_BENCHMARK_DEVICE_ID or '
+        'QUICK_BLUE_BENCHMARK_NAME_PATTERN to select a benchmark device.',
+      );
+      return;
+    }
+
+    final bluetoothAvailable = await _waitForBluetoothAvailable();
+    if (!bluetoothAvailable) {
+      fail(
+        'Bluetooth is not powered on, unavailable, or permission was denied.',
+      );
+    }
+
+    final target = await _benchmarkTarget();
+    if (target == null) {
+      markTestSkipped('No BLE device matched the benchmark target.');
+      return;
+    }
+
+    final device = target.device;
+    final connectedByBenchmark = target.shouldDisconnect;
+    final result = <String, Object?>{
+      'target': target.description,
+      'platform': defaultTargetPlatform.name,
+      'notifyServiceUuid': _notifyServiceUuid,
+      'notifyCharacteristicUuid': _notifyCharacteristicUuid,
+      'notificationDurationSeconds': _durationSeconds,
+    };
+
+    try {
+      if (target.shouldConnect) {
+        await device.connect().timeout(_seconds(_connectTimeoutSeconds, 15));
+      }
+
+      final services = await device.discoverServices().timeout(
+        _seconds(_serviceTimeoutSeconds, 15),
+      );
+      final notifyInfo = _findCharacteristic(
+        services,
+        serviceUuid: _notifyServiceUuid,
+        characteristicUuid: _notifyCharacteristicUuid,
+      );
+      if (notifyInfo == null || !notifyInfo.info.canSubscribe) {
+        fail(
+          'Benchmark characteristic $_notifyServiceUuid/'
+          '$_notifyCharacteristicUuid was not discovered or does not support '
+          'notify/indicate.',
+        );
+      }
+
+      _ResolvedCharacteristic? notifyWriteTarget;
+      Uint8List? notifyWriteCommand;
+      if (_notifyWriteCommandHex.trim().isNotEmpty) {
+        notifyWriteCommand = _hexBytes(_notifyWriteCommandHex);
+        notifyWriteTarget = _notifyWriteTarget(services, notifyInfo);
+        if (notifyWriteTarget == null) {
+          fail(
+            'Notify-write benchmark characteristic '
+            '$_notifyWriteServiceUuid/$_notifyWriteCharacteristicUuid was '
+            'not discovered.',
+          );
+        }
+        if (!notifyWriteTarget.info.canWrite) {
+          fail(
+            'Notify-write benchmark characteristic '
+            '${notifyWriteTarget.service.uuid}/${notifyWriteTarget.info.uuid} '
+            'does not support writes.',
+          );
+        }
+        result['notifyWriteServiceUuid'] = notifyWriteTarget.service.uuid;
+        result['notifyWriteCharacteristicUuid'] = notifyWriteTarget.info.uuid;
+        result['notifyWriteCommandHex'] = _hex(notifyWriteCommand);
+        result['notificationMode'] = 'writeCommand';
+      } else {
+        result['notificationMode'] = 'passiveDuration';
+      }
+
+      final notifyResult = await _measureNotifications(
+        device: device,
+        serviceUuid: notifyInfo.service.uuid,
+        characteristicUuid: notifyInfo.info.uuid,
+        writeTarget: notifyWriteTarget,
+        writeCommand: notifyWriteCommand,
+      );
+      result['notifications'] = notifyResult.toJson();
+
+      final readTarget = _readTarget(services, notifyInfo);
+      final hasExplicitReadTarget =
+          _readServiceUuid.isNotEmpty && _readCharacteristicUuid.isNotEmpty;
+      if (readTarget == null && hasExplicitReadTarget) {
+        fail(
+          'Read benchmark characteristic $_readServiceUuid/'
+          '$_readCharacteristicUuid was not discovered.',
+        );
+      }
+      if (readTarget == null) {
+        result['reads'] = <String, Object?>{
+          'skipped': true,
+          'reason':
+              'No readable benchmark characteristic was configured or '
+              'available on the notifying characteristic.',
+        };
+      } else {
+        result['readServiceUuid'] = readTarget.service.uuid;
+        result['readCharacteristicUuid'] = readTarget.info.uuid;
+        result['reads'] = (await _measureReads(
+          device: device,
+          serviceUuid: readTarget.service.uuid,
+          characteristicUuid: readTarget.info.uuid,
+        )).toJson();
+      }
+    } finally {
+      if (connectedByBenchmark) {
+        await _bestEffortDisconnect(device);
+      }
+    }
+
+    binding.reportData = result;
+    debugPrint(
+      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+        'quickBlueBleCharacteristicBenchmark': result,
+      }),
+      wrapWidth: 1024,
+    );
+  }, timeout: Timeout(_seconds(_durationSeconds + 180, 210)));
 }
 
 bool _supportsBleBenchmark(TargetPlatform platform) {

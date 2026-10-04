@@ -36,68 +36,66 @@ const _secondNamePattern = String.fromEnvironment(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'switches devices while the first connection is still pending',
-    (_) async {
-      if (defaultTargetPlatform != TargetPlatform.macOS) {
-        markTestSkipped(
-          'This switch regression targets the macOS CoreBluetooth path.',
-        );
-        return;
-      }
-
-      final bluetoothAvailable = await _waitForBluetoothAvailable();
-      if (!bluetoothAvailable) {
-        markTestSkipped(
-          'Bluetooth is not powered on, unavailable, or permission was denied.',
-        );
-        return;
-      }
-
-      final targets = await _scanForSwitchTargets();
-      final first = targets.first;
-      final second = targets.second;
-
-      final controller = BleExplorerController(
-        connectTimeout: _seconds(_connectTimeoutSeconds, 8),
+  testWidgets('switches devices while the first connection is still pending', (
+    _,
+  ) async {
+    if (defaultTargetPlatform != TargetPlatform.macOS) {
+      markTestSkipped(
+        'This switch regression targets the macOS CoreBluetooth path.',
       );
-      addTearDown(controller.dispose);
-      await controller.initialBluetoothCheck;
-      controller.devices[first.deviceId] = first;
-      controller.devices[second.deviceId] = second;
+      return;
+    }
 
-      await controller.selectDevice(first.deviceId);
-      final firstConnect = controller.connectSelected().catchError((
-        Object error,
-        StackTrace stackTrace,
-      ) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'quick_blue_example_test',
-            context: ErrorDescription('while connecting first BLE target'),
-          ),
-        );
-      });
-
-      await Future<void>.delayed(
-        Duration(milliseconds: _positive(_switchDelayMilliseconds, 600)),
+    final bluetoothAvailable = await _waitForBluetoothAvailable();
+    if (!bluetoothAvailable) {
+      markTestSkipped(
+        'Bluetooth is not powered on, unavailable, or permission was denied.',
       );
-      await controller.selectDevice(second.deviceId);
-      await controller.connectSelected().timeout(
-        _seconds(_secondConnectTimeoutSeconds, 12),
+      return;
+    }
+
+    final targets = await _scanForSwitchTargets();
+    final first = targets.first;
+    final second = targets.second;
+
+    final controller = BleExplorerController(
+      connectTimeout: _seconds(_connectTimeoutSeconds, 8),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialBluetoothCheck;
+    controller.devices[first.deviceId] = first;
+    controller.devices[second.deviceId] = second;
+
+    await controller.selectDevice(first.deviceId);
+    final firstConnect = controller.connectSelected().catchError((
+      Object error,
+      StackTrace stackTrace,
+    ) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'quick_blue_example_test',
+          context: ErrorDescription('while connecting first BLE target'),
+        ),
       );
+    });
 
-      expect(controller.selectedDeviceId, second.deviceId);
-      expect(controller.connecting, isFalse);
-      expect(controller.connectionState, BlueConnectionState.connected);
+    await Future<void>.delayed(
+      Duration(milliseconds: _positive(_switchDelayMilliseconds, 600)),
+    );
+    await controller.selectDevice(second.deviceId);
+    await controller.connectSelected().timeout(
+      _seconds(_secondConnectTimeoutSeconds, 12),
+    );
 
-      await _bestEffortDisconnect(QuickBlue.device(second.deviceId));
-      await firstConnect;
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    expect(controller.selectedDeviceId, second.deviceId);
+    expect(controller.connecting, isFalse);
+    expect(controller.connectionState, BlueConnectionState.connected);
+
+    await _bestEffortDisconnect(QuickBlue.device(second.deviceId));
+    await firstConnect;
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 Future<bool> _waitForBluetoothAvailable() async {

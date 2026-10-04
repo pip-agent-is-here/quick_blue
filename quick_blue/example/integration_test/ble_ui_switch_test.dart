@@ -134,18 +134,13 @@ Finder _deviceRow(RegExp namePattern) {
 }
 
 Future<void> _waitForEnabledButton(WidgetTester tester, Finder finder) async {
-  await _waitForCondition(
-    tester,
-    const Duration(seconds: 8),
-    () {
-      if (finder.evaluate().isEmpty) {
-        return false;
-      }
-      final button = tester.widget<ButtonStyleButton>(finder);
-      return button.onPressed != null;
-    },
-    'Timed out waiting for enabled button: $finder',
-  );
+  await _waitForCondition(tester, const Duration(seconds: 8), () {
+    if (finder.evaluate().isEmpty) {
+      return false;
+    }
+    final button = tester.widget<ButtonStyleButton>(finder);
+    return button.onPressed != null;
+  }, 'Timed out waiting for enabled button: $finder');
 }
 
 Future<void> _waitForFinder(
