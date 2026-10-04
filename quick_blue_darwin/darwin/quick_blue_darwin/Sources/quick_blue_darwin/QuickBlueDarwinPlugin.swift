@@ -729,6 +729,29 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         "\(deviceId)/\(characteristicId)"
     }
 
+    /// Removes and returns the first queued element for [key], dropping the key
+    /// once its queue empties.
+    ///
+    /// The three CoreBluetooth completion callbacks (write, read and
+    /// notification state) all hand their pending work off this way; keeping the
+    /// bookkeeping in one place is what stops those copies from drifting.
+    /// Callers must already hold `stateQueue`.
+    private func popPending<Key: Hashable, Element>(
+        _ key: Key,
+        from queues: inout [Key: [Element]]
+    ) -> Element? {
+        guard var queue = queues[key], !queue.isEmpty else {
+            return nil
+        }
+        let element = queue.removeFirst()
+        if queue.isEmpty {
+            queues.removeValue(forKey: key)
+        } else {
+            queues[key] = queue
+        }
+        return element
+    }
+
     private var attachedToEngine: Bool {
         lifecycleLock.lock()
         defer { lifecycleLock.unlock() }
@@ -2171,14 +2194,7 @@ extension QuickBlueDarwinPlugin: CBPeripheralDelegate {
         )
         var completion: ((Result<Void, Error>) -> Void)?
         stateQueue.sync {
-            if var queue = pendingWrites[key], !queue.isEmpty {
-                completion = queue.removeFirst()
-                if queue.isEmpty {
-                    pendingWrites.removeValue(forKey: key)
-                } else {
-                    pendingWrites[key] = queue
-                }
-            }
+            completion = popPending(key, from: &pendingWrites)
         }
         if let error = error {
             NSLog(
@@ -2206,14 +2222,7 @@ extension QuickBlueDarwinPlugin: CBPeripheralDelegate {
         var completion:
             ((Result<FlutterStandardTypedData, Error>) -> Void)?
         stateQueue.sync {
-            if var queue = pendingReads[key], !queue.isEmpty {
-                completion = queue.removeFirst()
-                if queue.isEmpty {
-                    pendingReads.removeValue(forKey: key)
-                } else {
-                    pendingReads[key] = queue
-                }
-            }
+            completion = popPending(key, from: &pendingReads)
         }
         if let error = error {
             // A failed read/notify delivers no value, so the Dart-side read
@@ -2266,16 +2275,8 @@ extension QuickBlueDarwinPlugin: CBPeripheralDelegate {
         )
         var pendingUpdates: [PendingNotificationUpdate] = []
         stateQueue.sync {
-            if var batches = pendingNotificationUpdates[key],
-                !batches.isEmpty
-            {
-                pendingUpdates = batches.removeFirst()
-                if batches.isEmpty {
-                    pendingNotificationUpdates.removeValue(forKey: key)
-                } else {
-                    pendingNotificationUpdates[key] = batches
-                }
-            }
+            pendingUpdates =
+                popPending(key, from: &pendingNotificationUpdates) ?? []
         }
         if let error = error {
             NSLog(
