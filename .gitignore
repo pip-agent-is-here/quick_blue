@@ -21,3 +21,4 @@ pubspec.lock
 *.jks
 local.properties
 **/.cxx/
+.worktrees/
