@@ -36,6 +36,25 @@
 
 namespace {
 
+/// Extracts the `name` argument of a stream handler payload. Returns an empty
+/// string when the payload is missing or is not a map with a string `name`,
+/// instead of letting std::get throw std::bad_variant_access out of the handler.
+std::string StreamNameFromArguments(const EncodableValue* arguments) {
+  if (arguments == nullptr) {
+    return std::string();
+  }
+  const auto* args = std::get_if<flutter::EncodableMap>(arguments);
+  if (args == nullptr) {
+    return std::string();
+  }
+  const auto entry = args->find(flutter::EncodableValue("name"));
+  if (entry == args->end()) {
+    return std::string();
+  }
+  const auto* name = std::get_if<std::string>(&entry->second);
+  return name == nullptr ? std::string() : *name;
+}
+
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Foundation::Collections;
 using namespace winrt::Windows::Storage::Streams;
@@ -644,9 +663,17 @@ winrt::fire_and_forget QuickBlueWindowsPlugin::DisableNotifications(
         characteristic->second.ValueChanged(token->second);
         device->second->valueChangedTokens.erase(token);
       }
-      co_await characteristic->second
+      const auto status = co_await characteristic->second
           .WriteClientCharacteristicConfigurationDescriptorAsync(
               GattClientCharacteristicConfigurationDescriptorValue::None);
+      if (status != GattCommunicationStatus::Success) {
+        // A failed native unsubscribe must not be reported as success: the
+        // notification claim has already been removed at this point.
+        std::string message =
+            "Failed to disable notifications for a detached engine (status " +
+            std::to_string(static_cast<int>(status)) + ")\n";
+        OutputDebugStringA(message.c_str());
+      }
     }
   } catch (const winrt::hresult_error& error) {
     OutputDebugString(L"Failed to disable detached engine notifications: ");
@@ -1008,7 +1035,11 @@ void QuickBlueWindowsPlugin::SendScanResult(
           {"rssi", args.RawSignalStrengthInDBm()},
       });
     }
-  } catch (const winrt::hresult_error&) {
+  } catch (const winrt::hresult_error& error) {
+    // Never drop a scan result silently.
+    OutputDebugString(L"Failed to emit a scan result: ");
+    OutputDebugString(error.message().c_str());
+    OutputDebugString(L"\n");
   }
 }
 
@@ -1016,11 +1047,11 @@ std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
 QuickBlueWindowsPlugin::OnListenInternal(
     const EncodableValue* arguments,
     std::unique_ptr<flutter::EventSink<EncodableValue>>&& events) {
-  if (arguments == nullptr) {
-    return nullptr;
+  const std::string name = StreamNameFromArguments(arguments);
+  if (name.empty()) {
+    return std::make_unique<flutter::StreamHandlerError<EncodableValue>>(
+        "bad_arguments", "Expected a map with a string 'name' key.", nullptr);
   }
-  auto args = std::get<EncodableMap>(*arguments);
-  auto name = std::get<std::string>(args[EncodableValue("name")]);
   if (name.compare("scanResult") == 0) {
     scan_result_sink_ = std::move(events);
   }
@@ -1029,11 +1060,11 @@ QuickBlueWindowsPlugin::OnListenInternal(
 
 std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
 QuickBlueWindowsPlugin::OnCancelInternal(const EncodableValue* arguments) {
-  if (arguments == nullptr) {
-    return nullptr;
+  const std::string name = StreamNameFromArguments(arguments);
+  if (name.empty()) {
+    return std::make_unique<flutter::StreamHandlerError<EncodableValue>>(
+        "bad_arguments", "Expected a map with a string 'name' key.", nullptr);
   }
-  auto args = std::get<EncodableMap>(*arguments);
-  auto name = std::get<std::string>(args[EncodableValue("name")]);
   if (name.compare("scanResult") == 0) {
     scan_result_sink_ = nullptr;
   }
@@ -1205,6 +1236,8 @@ winrt::fire_and_forget QuickBlueWindowsPlugin::RequestMtuAsync(
     if (!gattSession) {
       gattSession = co_await GattSession::FromDeviceIdAsync(
           bluetoothDeviceAgent.device.BluetoothDeviceId());
+      // Cache the session so later requests reuse it instead of recreating it.
+      bluetoothDeviceAgent.gattSession = gattSession;
     }
     if (!gattSession) {
       result(FlutterError("RequestMtuFailed", "Unable to create GATT session."));
