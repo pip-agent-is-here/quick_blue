@@ -345,6 +345,24 @@ class ScanFilter {
     return data == null ? null : _copyManufacturerData(data);
   }
 
+  /// A deep copy of this filter.
+  ///
+  /// The managed scan coordinator stores a caller-supplied filter for the
+  /// lifetime of a scan; copying on the way in means a caller mutating its own
+  /// lists or maps afterwards cannot change what an active scan matches.
+  ScanFilter copy() {
+    return ScanFilter(
+      serviceUuids: serviceUuids,
+      serviceData: _serviceData == null
+          ? null
+          : _copyServiceDataFilter(_serviceData),
+      manufacturerData: _manufacturerData == null
+          ? null
+          : _copyManufacturerData(_manufacturerData),
+      rssi: rssi,
+    );
+  }
+
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
@@ -467,6 +485,25 @@ class ScanOptions {
         'linux: $linux, '
         'windows: $windows'
         ')';
+  }
+
+  /// A copy of these options.
+  ///
+  /// The managed scan coordinator stores caller-supplied options for the
+  /// lifetime of a scan; a deep copy of the Darwin sub-options (the only mutable
+  /// content) keeps a later caller mutation from changing an active scan.
+  ScanOptions copy() {
+    return ScanOptions(
+      allowDuplicates: allowDuplicates,
+      scanMode: scanMode,
+      android: android,
+      darwin: DarwinScanOptions(
+        allowDuplicates: darwin.allowDuplicates,
+        solicitedServiceUuids: darwin.solicitedServiceUuids,
+      ),
+      linux: linux,
+      windows: windows,
+    );
   }
 }
 

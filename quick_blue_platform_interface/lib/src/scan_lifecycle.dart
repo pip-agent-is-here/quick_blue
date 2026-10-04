@@ -166,28 +166,12 @@ class ScanLifecycleCoordinator {
     return next;
   }
 
-  ScanFilter _copyScanFilter(ScanFilter scanFilter) {
-    return ScanFilter(
-      serviceUuids: scanFilter.serviceUuids,
-      serviceData: scanFilter.serviceData,
-      manufacturerData: scanFilter.manufacturerData,
-      rssi: scanFilter.rssi,
-    );
-  }
+  /// The model types own the deep-copy rules, so a field added to a model
+  /// cannot be silently dropped from managed scans (the hand-enumerated copy
+  /// this replaces had exactly that hazard).
+  ScanFilter _copyScanFilter(ScanFilter scanFilter) => scanFilter.copy();
 
-  ScanOptions _copyScanOptions(ScanOptions scanOptions) {
-    return ScanOptions(
-      allowDuplicates: scanOptions.allowDuplicates,
-      scanMode: scanOptions.scanMode,
-      android: scanOptions.android,
-      darwin: DarwinScanOptions(
-        allowDuplicates: scanOptions.darwin.allowDuplicates,
-        solicitedServiceUuids: scanOptions.darwin.solicitedServiceUuids,
-      ),
-      linux: scanOptions.linux,
-      windows: scanOptions.windows,
-    );
-  }
+  ScanOptions _copyScanOptions(ScanOptions scanOptions) => scanOptions.copy();
 }
 
 class _ScanConfiguration {
