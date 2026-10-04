@@ -1,50 +1,48 @@
 package com.example.quick_blue
 
-import PlatformCompanionAssociation
-import PlatformCompanionAssociationRequest
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * Guards the rule that Pigeon `@async` methods must always complete their
- * callback. Throwing instead escapes the generated message handler, which never
- * sends a reply, leaving the Dart future pending forever.
+ * Guards the rule that Pigeon `@async` methods must always resolve their Dart
+ * future, either by returning or by throwing (Pigeon 29+ catches `Throwable`
+ * around the suspend call and replies with the wrapped error). A guard that
+ * returns without completing — or that crashes the dispatcher — would leave the
+ * Dart future pending forever.
  *
- * Both methods reach their guard clauses before any Android framework call on an
- * unsupported SDK level, so the callbacks are observable from a JVM unit test.
+ * Both methods reach their guard clauses before any Android framework call on
+ * an unsupported SDK level, so the failure paths are observable from a JVM unit
+ * test.
  */
 class QuickBluePluginAsyncCallbackTest {
     @Test
-    fun `openL2cap completes its callback on an unsupported SDK instead of throwing`() {
+    fun `openL2cap fails on an unsupported SDK instead of hanging`() = runBlocking {
         val plugin = QuickBluePlugin()
-        var result: Result<Unit>? = null
 
-        plugin.openL2cap("AA:BB:CC:DD:EE:FF", 0x1001L) { result = it }
-
-        assertNotNull("openL2cap must complete its callback", result)
-        assertTrue(
-            "an unsupported SDK must fail the callback",
-            result!!.exceptionOrNull() != null,
-        )
+        try {
+            plugin.openL2cap("AA:BB:CC:DD:EE:FF", 0x1001L)
+            fail("an unsupported SDK must fail openL2cap")
+        } catch (expected: FlutterError) {
+            assertEquals("UnsupportedAndroidVersion", expected.code)
+        }
     }
 
     @Test
-    fun `companionAssociate completes its callback on an unsupported SDK instead of throwing`() {
+    fun `companionAssociate fails on an unsupported SDK instead of hanging`() = runBlocking {
         val plugin = QuickBluePlugin()
-        var result: Result<PlatformCompanionAssociation?>? = null
 
-        plugin.companionAssociate(
-            PlatformCompanionAssociationRequest(
-                filters = emptyList(),
-                singleDevice = true,
-            ),
-        ) { result = it }
-
-        assertNotNull("companionAssociate must complete its callback", result)
-        assertTrue(
-            "an unsupported SDK must fail the callback",
-            result!!.exceptionOrNull() != null,
-        )
+        try {
+            plugin.companionAssociate(
+                PlatformCompanionAssociationRequest(
+                    filters = emptyList(),
+                    singleDevice = true,
+                ),
+            )
+            fail("an unsupported SDK must fail companionAssociate")
+        } catch (expected: FlutterError) {
+            assertEquals("UnsupportedAndroidVersion", expected.code)
+        }
     }
 }
