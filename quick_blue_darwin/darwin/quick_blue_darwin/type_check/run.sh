@@ -19,5 +19,5 @@ command -v swift >/dev/null || {
   exit 127
 }
 
-python3 generate_sources.py
+"$DIR/generate_sources.sh"
 swift build
