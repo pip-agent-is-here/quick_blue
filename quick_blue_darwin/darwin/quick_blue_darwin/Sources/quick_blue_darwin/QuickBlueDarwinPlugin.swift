@@ -72,15 +72,24 @@ extension CBPeripheral {
         return c
     }
 
+    /// - Returns: `false` when the characteristic can no longer be resolved, rather
+    ///   than trapping on a stale characteristic.
+    @discardableResult
     func setNotifiable(
         _ bleInputProperty: PlatformBleInputProperty,
         for characteristic: String,
         of service: String
-    ) {
+    ) -> Bool {
+        guard
+            let resolved = getCharacteristic(characteristic, of: service)
+        else {
+            return false
+        }
         setNotifyValue(
             bleInputProperty != PlatformBleInputProperty.disabled,
-            for: getCharacteristic(characteristic, of: service)!
+            for: resolved
         )
+        return true
     }
 }
 
@@ -1056,7 +1065,7 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         deviceId: String,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(macCatalyst)
             if #available(iOS 18.0, *) {
                 getAppleAccessorySetupCoordinator().remove(
                     deviceId: deviceId,
