@@ -25,7 +25,7 @@ Android, iOS, macOS, Windows, and Linux.
 
 | Target | Minimum or runtime requirement |
 | :--- | :--- |
-| Flutter | 3.44.2 |
+| Flutter | 3.44.2 (CI and hardware verification run 3.47.6) |
 | Dart | 3.12.2 |
 | Android | API 26 |
 | iOS | 13.0 |

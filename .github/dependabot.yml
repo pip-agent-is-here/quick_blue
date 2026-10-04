@@ -4,3 +4,66 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue_darwin
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue_linux
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue_windows
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue_platform_interface
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
+  - package-ecosystem: pub
+    directory: /quick_blue/example
+    schedule:
+      interval: weekly
+      groups:
+        dart-minor-patch:
+          update-types:
+            - "minor"
+            - "patch"
