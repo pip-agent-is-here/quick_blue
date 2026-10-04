@@ -156,6 +156,29 @@ BlueZ and a working BLE adapter are required. The BlueZ daemon must be running,
 and the application process must be allowed to access BlueZ on the system
 D-Bus.
 
+Connections are serialized per device through system-bus names under
+`dev.quick_blue.Connection.*`. Distributions that deny name ownership to
+unprivileged users by default (Fedora, for example) make every `connect()` fail
+with:
+
+```
+org.freedesktop.DBus.Error.AccessDenied: Request to own name refused by policy
+```
+
+Install the supplied policy for the user that runs the application:
+
+```sh
+sed "s/RUN_AS_USER/$USER/" quick_blue_linux/dbus/dev.quick_blue.Connection.conf \
+  | sudo tee /usr/share/dbus-1/system.d/dev.quick_blue.Connection.conf >/dev/null
+sudo systemctl reload dbus-broker   # or: sudo systemctl restart dbus
+```
+
+Multi-user hosts can grant a shared group instead by replacing the
+`<policy user="...">` element with `<policy group="bluetooth">`.
+
+`QuickBlue.capabilities().supportsL2capSockets` additionally requires the
+distro package that provides `libbluetooth.so.3` (BlueZ runtime libraries).
+
 The [example app](https://github.com/prefanatic/quick_blue/tree/master/quick_blue/example)
 contains working Android, iOS, and macOS configuration.
 

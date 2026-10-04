@@ -1,15 +1,5 @@
 ## Unreleased
 
-### Fixed
-
-- Prevent a duplicate Android pairing request after a protected GATT operation
-  starts an implicit bond. Security recovery now observes the bond state before
-  it starts an explicit bond.
-
-- Wait for Android's native MTU callback and return the negotiated value instead
-  of completing when the request is only enqueued, and fail a pending request
-  if its GATT disconnects.
-
 ### Added
 
 - Add subscription-owned `maintainConnection` with bounded exponential
@@ -65,6 +55,35 @@
 
 ### Fixed
 
+- Prevent a duplicate Android pairing request after a protected GATT operation
+  starts an implicit bond. Security recovery now observes the bond state before
+  it starts an explicit bond.
+- Wait for Android's native MTU callback and return the negotiated value instead
+  of completing when the request is only enqueued, and fail a pending request
+  if its GATT disconnects.
+- Always complete the asynchronous `openL2cap` and `companionAssociate`
+  platform calls. Throwing instead of failing the callback left the Dart future
+  pending forever on unsupported Android versions, unknown devices, malformed
+  companion filters, and missing companion permissions.
+- Fail Android pairing callbacks that never receive a terminal bond state after
+  30 seconds, and on engine detach, instead of retaining them indefinitely.
+- Register the Android Bluetooth state receiver with `RECEIVER_NOT_EXPORTED`
+  so API 34+ targets no longer throw `SecurityException`.
+- Deliver Android L2CAP error and closed callbacks from a scope that is not
+  cancelled with the socket scope, so error events are no longer dropped, and
+  emit each terminal callback at most once.
+- Fix the macOS Catalyst build of `removeAppleAccessory`, which referenced a
+  symbol compiled only for iOS without Catalyst.
+- Stop `setNotifiable` from trapping on a stale Darwin characteristic; it now
+  reports the unresolved characteristic instead.
+- Bound the Darwin restoration replay and pre-subscription buffers so a
+  restoring manager cannot grow them for the process lifetime.
+- Bound the Linux per-device connection lock and the L2CAP `connect` retry loop,
+  which could otherwise spin indefinitely on a stale lock name or on `EINVAL`
+  with a dynamic PSM.
+- Treat a Windows notification-unsubscribe that does not return `Success` as a
+  failure instead of reporting it as successful, reuse an already-created GATT
+  session for MTU requests, and log scan results that fail to emit.
 - Recover from missing Android terminal disconnect callbacks without poisoning
   later reconnects, while ignoring late callbacks from the retired GATT.
 - Share the Darwin restoration manager across Flutter engines so eager

@@ -8,3 +8,35 @@ to use this implementation from the fork.
 
 See the [QuickBlue repository](https://github.com/prefanatic/quick_blue) for
 usage, platform setup, and development documentation.
+
+## Requirements
+
+- A running BlueZ daemon and a working BLE adapter.
+- A D-Bus system-bus policy that lets the application user own names under
+  `dev.quick_blue.Connection.*`. Without it every `connect()` fails with
+  `Request to own name refused by policy`; install the supplied template:
+
+  ```sh
+  sed "s/RUN_AS_USER/$USER/" dbus/dev.quick_blue.Connection.conf \
+    | sudo tee /usr/share/dbus-1/system.d/dev.quick_blue.Connection.conf >/dev/null
+  sudo systemctl reload dbus-broker   # or: sudo systemctl restart dbus
+  ```
+
+- `libbluetooth.so.3` (installed with BlueZ runtime libraries) for L2CAP
+  sockets; `QuickBlue.capabilities().supportsL2capSockets` reports support
+  regardless, and `openL2cap` fails with an error when the library is absent.
+
+## Tests
+
+```sh
+flutter test
+```
+
+Hardware-backed BLE behaviour is covered by the example app's integration test
+(the Linux package itself only exercises pure helpers):
+
+```sh
+cd ../quick_blue/example
+QUICK_BLUE_HIDE_TEST_WINDOW=1 \
+  xvfb-run -a flutter test integration_test/ble_smoke_test.dart -d linux
+```
