@@ -4,6 +4,7 @@ import 'package:meta/meta.dart';
 
 import '../models.dart';
 import 'quick_blue_exception.dart';
+import 'cancellation_signal.dart';
 
 @internal
 class ManagedConnectionLifecycleCoordinator {
@@ -86,7 +87,7 @@ class _ManagedConnection {
   final MultiStreamController<BluetoothConnectionStateChange> controller;
   final void Function() onFinished;
 
-  final _stopSignal = Completer<void>();
+  final CancellationSignal _stopSignal = CancellationSignal();
   StreamSubscription<BluetoothConnectionStateChange>? _eventSubscription;
   Completer<void>? _nextDisconnection;
   late final Future<void> _reporting;
@@ -202,7 +203,7 @@ class _ManagedConnection {
         _connected = true;
       }
     } catch (_) {
-      if (!_stopSignal.isCompleted) {
+      if (!_stopSignal.isCancelled) {
         _connectionInFlight = false;
         _nextDisconnection = null;
       }
@@ -211,12 +212,10 @@ class _ManagedConnection {
   }
 
   Future<T> _untilStopped<T>(Future<T> operation) {
-    return Future.any<T>(<Future<T>>[
+    return _stopSignal.race<T>(
       operation,
-      _stopSignal.future.then<T>(
-        (_) => throw const _ManagedConnectionStopped(),
-      ),
-    ]);
+      cancellationError: const _ManagedConnectionStopped(),
+    );
   }
 
   Future<void> cancel() => stop(disconnect: true);
@@ -227,9 +226,7 @@ class _ManagedConnection {
     }
     _stopRequested = true;
     _disconnectWhenStopped = disconnect;
-    if (!_stopSignal.isCompleted) {
-      _stopSignal.complete();
-    }
+    _stopSignal.cancel();
     await _reporting;
 
     final error = _stopError;
