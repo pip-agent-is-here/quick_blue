@@ -32,8 +32,9 @@ public final class ProcessWideManagerRegistry<
     private let managerCreationLock = NSLock()
 
     /// Upper bound on the restoration-event replay log handed to each newly
-    /// registered client; the oldest events are dropped first.
-    public static let maxReplayedRestorationEvents = 64
+    /// registered client; the oldest events are dropped first. Computed because
+    /// Swift does not allow stored static properties in generic types.
+    public static var maxReplayedRestorationEvents: Int { 64 }
 
     private var manager: Manager?
     private var managerConfiguration: Configuration?
