@@ -132,6 +132,32 @@ final class ProcessWideManagerRegistryTests: XCTestCase {
         XCTAssertEqual(lateClient.restorationEvents, ["restored"])
     }
 
+    func testReplayLogIsBoundedAndKeepsNewestEvents() {
+        let registry = Registry()
+        let client = FakeClient()
+        registry.register(client)
+        let overflow = Registry.maxReplayedRestorationEvents + 5
+
+        for index in 1...overflow {
+            registry.publishRestorationEvent("event-\(index)") { _, _ in }
+        }
+
+        let lateClient = FakeClient()
+        let registration = registry.register(lateClient)
+
+        XCTAssertEqual(
+            registration.restorationEvents.count,
+            Registry.maxReplayedRestorationEvents
+        )
+        XCTAssertEqual(
+            registration.restorationEvents.last,
+            "event-\(overflow)"
+        )
+        XCTAssertFalse(
+            registration.restorationEvents.contains("event-1")
+        )
+    }
+
     func testConcurrentManagerAccessCreatesOneManager() {
         let registry = Registry()
         let clients = (0..<20).map { _ in FakeClient() }

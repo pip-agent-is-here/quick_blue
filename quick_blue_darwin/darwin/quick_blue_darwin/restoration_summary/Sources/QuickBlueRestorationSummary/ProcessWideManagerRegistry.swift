@@ -30,6 +30,11 @@ public final class ProcessWideManagerRegistry<
 
     private let lock = NSRecursiveLock()
     private let managerCreationLock = NSLock()
+
+    /// Upper bound on the restoration-event replay log handed to each newly
+    /// registered client; the oldest events are dropped first.
+    public static let maxReplayedRestorationEvents = 64
+
     private var manager: Manager?
     private var managerConfiguration: Configuration?
     private var clients: [ObjectIdentifier: WeakClient] = [:]
@@ -168,6 +173,14 @@ public final class ProcessWideManagerRegistry<
     ) {
         let snapshot = withLock {
             restorationEvents.append(event)
+            // Bound the replay log: a restoring manager never resets (see
+            // resetIfUnused), so an unbounded array would grow for the process
+            // lifetime and replay every historical event to each new engine.
+            if restorationEvents.count > Self.maxReplayedRestorationEvents {
+                restorationEvents.removeFirst(
+                    restorationEvents.count - Self.maxReplayedRestorationEvents
+                )
+            }
             return registeredClients()
         }
         for client in snapshot {

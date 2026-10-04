@@ -37,4 +37,16 @@ final class BufferedRestorationEventDeliveryTests: XCTestCase {
         delivery.start { received.append($0) }
         XCTAssertEqual(received, [1])
     }
+
+    func testDropsOldestPendingEventsBeyondTheBufferLimit() {
+        let delivery = BufferedRestorationEventDelivery<Int>(maxPendingEvents: 3)
+        for event in 1...5 {
+            delivery.emit(event)
+        }
+
+        var received: [Int] = []
+        delivery.start { received.append($0) }
+
+        XCTAssertEqual(received, [3, 4, 5])
+    }
 }
