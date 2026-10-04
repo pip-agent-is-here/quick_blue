@@ -117,3 +117,26 @@ dart run pigeon --input pigeons/messages.dart
 ```
 
 Inspect the resulting generated-file diff before submitting the change.
+
+## Releasing
+
+All five packages share one version. `scripts/publish-packages.sh` enforces the
+invariants — every pubspec carries the same `version`, each platform package
+depends on `quick_blue_platform_interface` at that version, and the app-facing
+package pins all federated packages — then runs the publish steps:
+
+```sh
+scripts/publish-packages.sh --dry-run   # CI runs this on every change
+scripts/publish-packages.sh --publish   # real publish, run manually
+```
+
+Before releasing:
+
+1. Fold the `Unreleased` entries into a dated `## [x.y.z]` heading in
+   `quick_blue/CHANGELOG.md` (CI fails when the pubspec version has no
+   changelog heading).
+2. Bump `version` in every package's `pubspec.yaml` in the same change.
+3. Update the federated dependency constraints (the script reports any that
+   drift).
+4. Run `scripts/publish-packages.sh --dry-run` and confirm the smoke tests for
+   every platform you can reach.

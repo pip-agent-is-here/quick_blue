@@ -17,7 +17,8 @@ permissions:
 
 env:
   FLUTTER_CHANNEL: stable
-  FLUTTER_VERSION: "3.44.2"
+  # Keep in sync with the "tested with" row in quick_blue/README.md.
+  FLUTTER_VERSION: "3.47.6"
 
 # Runner override variables accept JSON. For example:
 # LINUX_RUNNER: ["self-hosted","linux","x64"]
@@ -171,6 +172,41 @@ jobs:
             quick_blue_windows/lib/src/messages.g.dart \
             quick_blue_windows/windows/messages.g.cpp \
             quick_blue_windows/windows/messages.g.h
+
+  publish-readiness:
+    name: Publish readiness
+    needs: changes
+    if: ${{ needs.changes.outputs.validate == 'true' }}
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Check versions and federated constraints
+        run: |
+          set -euo pipefail
+
+          # Enforces one shared version and the federated dependency pins.
+          scripts/publish-packages.sh --dry-run
+
+      - name: Check changelog coverage
+        run: |
+          set -euo pipefail
+
+          version="$(sed -n 's/^version: //p' quick_blue_platform_interface/pubspec.yaml)"
+          if ! grep -q "^## \[$version\]" quick_blue/CHANGELOG.md; then
+            echo "quick_blue/CHANGELOG.md has no ## [$version] heading for the current package version" >&2
+            exit 65
+          fi
 
   analyze:
     name: Analyze ${{ matrix.package }}
