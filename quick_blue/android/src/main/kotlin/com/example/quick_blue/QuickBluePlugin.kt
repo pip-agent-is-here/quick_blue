@@ -1,39 +1,5 @@
 package com.example.quick_blue
 
-import FlutterError
-import BluetoothStateStreamHandler
-import BondStateChangesStreamHandler
-import L2CapSocketEventsStreamHandler
-import MtuChangedStreamHandler
-import PigeonEventSink
-import PlatformBleInputProperty
-import PlatformBleCompanionFilter
-import PlatformBleOutputProperty
-import PlatformAndroidScanCallbackType
-import PlatformAndroidScanMatchMode
-import PlatformAndroidScanMode
-import PlatformAndroidScanNumOfMatches
-import PlatformAndroidScanOptions
-import PlatformAndroidScanPhy
-import PlatformBondState
-import PlatformBondStateChange
-import PlatformBluetoothState
-import PlatformCharacteristic
-import PlatformCharacteristicValueChanged
-import PlatformCompanionAssociation
-import PlatformCompanionAssociationRequest
-import PlatformCapabilities
-import PlatformConnectionState
-import PlatformConnectionStateChange
-import PlatformGattStatus
-import PlatformGattServiceChange
-import PlatformL2CapSocketEvent
-import PlatformMtuChange
-import PlatformScanResult
-import PlatformServiceDiscovered
-import QuickBlueApi
-import QuickBlueFlutterApi
-import ScanResultsStreamHandler
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
@@ -74,10 +40,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -336,14 +306,16 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         if (!isAttachedToEngine) return
         mainThreadHandler.post {
             if (!isAttachedToEngine) return@post
-            quickBlueFlutterApi?.onConnectionStateChange(
-                PlatformConnectionStateChange(
-                    deviceId = deviceId,
-                    state = state,
-                    gattStatus = status,
-                    nativeStatus = nativeStatus.toLong(),
+            sendToFlutter {
+                it.onConnectionStateChange(
+                    PlatformConnectionStateChange(
+                        deviceId = deviceId,
+                        state = state,
+                        gattStatus = status,
+                        nativeStatus = nativeStatus.toLong(),
+                    )
                 )
-            ) {}
+            }
         }
     }
 
@@ -354,21 +326,15 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         if (!isAttachedToEngine) return
         mainThreadHandler.post {
             if (!isAttachedToEngine) return@post
-            if (services.isEmpty()) {
-                quickBlueFlutterApi?.onServiceDiscoveryComplete(deviceId) {}
-                return@post
-            }
-
-            var pendingServiceCallbacks = services.size
-            services.forEach { service ->
-                quickBlueFlutterApi?.onServiceDiscovered(
-                    service
-                ) {
-                    pendingServiceCallbacks -= 1
-                    if (pendingServiceCallbacks == 0) {
-                        quickBlueFlutterApi?.onServiceDiscoveryComplete(deviceId) {}
-                    }
+            sendToFlutter { api ->
+                if (services.isEmpty()) {
+                    api.onServiceDiscoveryComplete(deviceId)
+                    return@sendToFlutter
                 }
+                services.forEach { service ->
+                    api.onServiceDiscovered(service)
+                }
+                api.onServiceDiscoveryComplete(deviceId)
             }
         }
     }
@@ -377,12 +343,14 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         if (!isAttachedToEngine) return
         mainThreadHandler.post {
             if (!isAttachedToEngine) return@post
-            quickBlueFlutterApi?.onGattServicesChanged(
-                PlatformGattServiceChange(
-                    deviceId = deviceId,
-                    invalidatedServiceUuids = emptyList(),
+            sendToFlutter {
+                it.onGattServicesChanged(
+                    PlatformGattServiceChange(
+                        deviceId = deviceId,
+                        invalidatedServiceUuids = emptyList(),
+                    )
                 )
-            ) {}
+            }
         }
     }
 
@@ -409,14 +377,16 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         if (!isAttachedToEngine) return
         mainThreadHandler.post {
             if (!isAttachedToEngine) return@post
-            quickBlueFlutterApi?.onCharacteristicValueChanged(
-                PlatformCharacteristicValueChanged(
-                    deviceId = deviceId,
-                    serviceUuid = serviceId,
-                    characteristicId = characteristicId,
-                    value = value,
+            sendToFlutter {
+                it.onCharacteristicValueChanged(
+                    PlatformCharacteristicValueChanged(
+                        deviceId = deviceId,
+                        serviceUuid = serviceId,
+                        characteristicId = characteristicId,
+                        value = value,
+                    )
                 )
-            ) {}
+            }
         }
     }
 
@@ -513,7 +483,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         return PlatformCapabilities(
             supportsGattServiceChanges = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
             supportsL2capSockets = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
-            supportsCompanionAssociation = isCompanionAssociationSupported(),
+            supportsCompanionAssociation = isCompanionAssociationPlatformSupported(),
         )
     }
 
@@ -657,77 +627,84 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         }
     }
 
-    override fun pair(deviceId: String, callback: (Result<Unit>) -> Unit) {
+    override suspend fun pair(deviceId: String) {
         val device = try {
             ensureBluetoothConnectPermission()
             remoteDevice(deviceId)
         } catch (error: FlutterError) {
-            callback(Result.failure(error))
+            throw error
+        }
+
+        if (device.bondState == BluetoothDevice.BOND_BONDED) {
             return
         }
 
-        when (device.bondState) {
-            BluetoothDevice.BOND_BONDED -> {
-                callback(Result.success(Unit))
-                return
+        try {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                val completer: (Result<Unit>) -> Unit = { result ->
+                    result
+                        .onSuccess { value ->
+                            if (continuation.isActive) continuation.resume(value)
+                        }
+                        .onFailure { error ->
+                            if (continuation.isActive) continuation.resumeWithException(error)
+                        }
+                }
+                continuation.invokeOnCancellation {
+                    removePendingPairCallback(device.address, completer)
+                }
+                registerPendingPairCallback(device, completer)
+
+                if (device.bondState == BluetoothDevice.BOND_BONDING) {
+                    return@suspendCancellableCoroutine Unit
+                }
+
+                val started = try {
+                    device.createBond()
+                } catch (error: Throwable) {
+                    removePendingPairCallback(device.address, completer)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(
+                            FlutterError(
+                                "BondFailed",
+                                error.message ?: "Failed to start pairing for $deviceId",
+                                null
+                            )
+                        )
+                    }
+                    return@suspendCancellableCoroutine Unit
+                }
+                if (!started) {
+                    removePendingPairCallback(device.address, completer)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(
+                            FlutterError(
+                                "BondFailed",
+                                "Failed to start pairing for $deviceId",
+                                null
+                            )
+                        )
+                    }
+                }
             }
-            BluetoothDevice.BOND_BONDING -> {
-                registerPendingPairCallback(device, callback)
-                return
-            }
-        }
-
-        registerPendingPairCallback(device, callback)
-
-        val started = try {
-            device.createBond()
-        } catch (error: Throwable) {
-            removePendingPairCallback(device.address, callback)
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "BondFailed",
-                        error.message ?: "Failed to start pairing for $deviceId",
-                        null
-                    )
-                )
-            )
-            return
-        }
-
-        if (!started) {
-            removePendingPairCallback(device.address, callback)
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "BondFailed",
-                        "Failed to start pairing for $deviceId",
-                        null
-                    )
-                )
-            )
+        } catch (error: CancellationException) {
+            throw error
         }
     }
 
-    override fun isCompanionAssociationSupported(callback: (Result<Boolean>) -> Unit) {
-        callback(Result.success(isCompanionAssociationSupported()))
+    override suspend fun isCompanionAssociationSupported(): Boolean {
+        return isCompanionAssociationPlatformSupported()
     }
 
-    override fun companionAssociate(
+    override suspend fun companionAssociate(
         request: PlatformCompanionAssociationRequest,
-        callback: (Result<PlatformCompanionAssociation?>) -> Unit
-    ) {
-        if (!isCompanionAssociationSupported()) {
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "UnsupportedAndroidVersion",
-                        "Associating companion devices requires Android API 33 or higher",
-                        null
-                    )
-                )
+    ): PlatformCompanionAssociation? {
+        if (!isCompanionAssociationPlatformSupported()) {
+            throw FlutterError(
+                "UnsupportedAndroidVersion",
+                "Associating companion devices requires Android API 33 or higher",
+                null
             )
-            return
         }
 
         val pairingRequest = try {
@@ -741,95 +718,93 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
             }
             pairingRequestBuilder.build()
         } catch (e: Exception) {
-            // Malformed filters (ParcelUuid/Pattern) must fail the callback rather
-            // than throw: companionAssociate is @async in Pigeon, so an exception
-            // escaping this method would leave the Dart future pending forever.
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "AssociationFailed",
-                        e.message ?: "Unable to build the companion device association request",
-                        null
-                    )
-                )
+            // Malformed filters (ParcelUuid/Pattern) fail the caller rather than
+            // escaping into the generated dispatcher.
+            throw FlutterError(
+                "AssociationFailed",
+                e.message ?: "Unable to build the companion device association request",
+                null
             )
-            return
         }
 
-        var completed = false
-        fun complete(result: Result<PlatformCompanionAssociation?>) {
-            if (completed) return
-            completed = true
-            callback(result)
-        }
+        return suspendCancellableCoroutine<PlatformCompanionAssociation?> { continuation ->
+            var completed = false
+            fun complete(result: Result<PlatformCompanionAssociation?>) {
+                if (completed || !continuation.isActive) return
+                completed = true
+                result
+                    .onSuccess { value -> continuation.resume(value) }
+                    .onFailure { error -> continuation.resumeWithException(error) }
+            }
 
-        try {
-            companionDeviceManager.associate(
-                pairingRequest,
-                executor,
-                object : CompanionDeviceManager.Callback() {
-                    override fun onAssociationPending(intentSender: IntentSender) {
-                        val currentActivity = activity
-                        if (currentActivity == null) {
+            try {
+                companionDeviceManager.associate(
+                    pairingRequest,
+                    executor,
+                    object : CompanionDeviceManager.Callback() {
+                        override fun onAssociationPending(intentSender: IntentSender) {
+                            val currentActivity = activity
+                            if (currentActivity == null) {
+                                complete(
+                                    Result.failure(
+                                        FlutterError(
+                                            "AssociationFailed",
+                                            "Companion device association requires an attached Activity",
+                                            null
+                                        )
+                                    )
+                                )
+                                return
+                            }
+                            startIntentSenderForResult(
+                                currentActivity,
+                                intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+                            )
+                        }
+
+                        override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                            complete(
+                                Result.success(
+                                    PlatformCompanionAssociation(
+                                        id = associationInfo.id.toLong(),
+                                        deviceId = associationInfo.deviceMacAddress?.toString(),
+                                        displayName = associationInfo.displayName?.toString(),
+                                        deviceProfile = associationInfo.deviceProfile,
+                                    )
+                                )
+                            )
+                        }
+
+                        override fun onFailure(errorMessage: CharSequence?) {
                             complete(
                                 Result.failure(
                                     FlutterError(
                                         "AssociationFailed",
-                                        "Companion device association requires an attached Activity",
+                                        errorMessage.toString(),
                                         null
                                     )
                                 )
                             )
-                            return
                         }
-                        startIntentSenderForResult(
-                            currentActivity,
-                            intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
-                        )
                     }
-
-                    override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                        complete(
-                            Result.success(
-                                PlatformCompanionAssociation(
-                                    id = associationInfo.id.toLong(),
-                                    deviceId = associationInfo.deviceMacAddress?.toString(),
-                                    displayName = associationInfo.displayName?.toString(),
-                                    deviceProfile = associationInfo.deviceProfile,
-                                )
-                            )
+                )
+            } catch (e: Exception) {
+                // SecurityException when REQUEST_COMPANION_* permissions are missing.
+                complete(
+                    Result.failure(
+                        FlutterError(
+                            "AssociationFailed",
+                            e.message ?: "Unable to start companion device association",
+                            null
                         )
-                    }
-
-                    override fun onFailure(errorMessage: CharSequence?) {
-                        complete(
-                            Result.failure(
-                                FlutterError(
-                                    "AssociationFailed",
-                                    errorMessage.toString(),
-                                    null
-                                )
-                            )
-                        )
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            // SecurityException when REQUEST_COMPANION_* permissions are missing.
-            complete(
-                Result.failure(
-                    FlutterError(
-                        "AssociationFailed",
-                        e.message ?: "Unable to start companion device association",
-                        null
                     )
                 )
-            )
+            }
         }
     }
 
     override fun companionDisassociate(associationId: Long) {
-        if (!isCompanionAssociationSupported()) {
+        if (!isCompanionAssociationPlatformSupported()) {
             throw FlutterError(
                 "UnsupportedAndroidVersion",
                 "Associating companion devices requires Android API 33 or higher",
@@ -840,7 +815,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
     }
 
     override fun getCompanionAssociations(): List<PlatformCompanionAssociation> {
-        if (!isCompanionAssociationSupported()) {
+        if (!isCompanionAssociationPlatformSupported()) {
             throw FlutterError(
                 "UnsupportedAndroidVersion",
                 "Associating companion devices requires Android API 33 or higher",
@@ -858,7 +833,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         }
     }
 
-    private fun isCompanionAssociationSupported(): Boolean {
+    private fun isCompanionAssociationPlatformSupported(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.packageManager.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)
     }
@@ -905,52 +880,31 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 client = this,
                 start = { it.discoverServices() },
                 onStartFailed = {
-                    quickBlueFlutterApi?.onServiceDiscoveryComplete(deviceId) {}
+                    sendToFlutter { it.onServiceDiscoveryComplete(deviceId) }
                 },
             )
         )
     }
 
-    override fun setNotifiable(
+    override suspend fun setNotifiable(
         deviceId: String,
         service: String,
         characteristic: String,
         bleInputProperty: PlatformBleInputProperty,
-        callback: (Result<Unit>) -> Unit
     ) {
-        // @async: report guard failures through the callback rather than
-        // throwing, since the generated dispatcher does not catch synchronous
-        // throws for async methods (the reply would never be sent).
         val gatt = attachedGatt(deviceId)
-        if (gatt == null) {
-            callback(
-                Result.failure(
-                    FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
-                )
-            )
-            return
-        }
+            ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val gattChar = try {
             gatt.getKnownCharacteristic(service, characteristic)
         } catch (error: FlutterError) {
-            callback(
-                Result.failure(error)
-            )
-            return
+            throw error
         }
         val descriptor = gattChar.getDescriptor(DESC__CLIENT_CHAR_CONFIGURATION)
-        if (descriptor == null) {
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "IllegalArgument",
-                        "Missing client characteristic configuration descriptor for $characteristic",
-                        null
-                    )
-                )
+            ?: throw FlutterError(
+                "IllegalArgument",
+                "Missing client characteristic configuration descriptor for $characteristic",
+                null
             )
-            return
-        }
         val (value, enable) = when (bleInputProperty) {
             PlatformBleInputProperty.NOTIFICATION -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE to true
             PlatformBleInputProperty.INDICATION -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE to true
@@ -969,20 +923,14 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         )
         val conflictingClaim = transition.conflict
         if (conflictingClaim != null) {
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "InvalidState",
-                        "Another Flutter engine configured $characteristic for " +
-                            "${conflictingClaim.name.lowercase()}",
-                        null
-                    )
-                )
+            throw FlutterError(
+                "InvalidState",
+                "Another Flutter engine configured $characteristic for " +
+                    "${conflictingClaim.name.lowercase()}",
+                null
             )
-            return
         }
         if (!transition.needsNativeWrite) {
-            callback(Result.success(Unit))
             return
         }
 
@@ -993,155 +941,134 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 transition.previous,
             )
         }
-        AndroidGattBroker.enqueue(
-            GattOperation(
-                deviceId = deviceId,
-                kind = GattOperationKind.WRITE_DESCRIPTOR,
-                client = this,
-                start = {
-                    descriptor.value = value
-                    it.setCharacteristicNotification(descriptor.characteristic, enable) &&
-                        it.writeDescriptor(descriptor)
-                },
-                onComplete = { status, _ ->
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        callback(Result.success(Unit))
-                    } else {
+        awaitGattCompletion { complete ->
+            AndroidGattBroker.enqueue(
+                GattOperation(
+                    deviceId = deviceId,
+                    kind = GattOperationKind.WRITE_DESCRIPTOR,
+                    client = this,
+                    start = {
+                        descriptor.value = value
+                        it.setCharacteristicNotification(descriptor.characteristic, enable) &&
+                            it.writeDescriptor(descriptor)
+                    },
+                    onComplete = { status, _ ->
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            complete(Result.success(Unit))
+                        } else {
+                            restoreClaimAfterFailure()
+                            complete(
+                                Result.failure(
+                                    gattError(
+                                        "Descriptor write failed for $characteristic",
+                                        status
+                                    )
+                                )
+                            )
+                        }
+                    },
+                    onStartFailed = {
                         restoreClaimAfterFailure()
-                        callback(
+                        complete(
                             Result.failure(
-                                gattError(
-                                    "Descriptor write failed for $characteristic",
-                                    status
+                                FlutterError(
+                                    "DescriptorWriteFailed",
+                                    "Failed to initiate descriptor write for $characteristic",
+                                    null
                                 )
                             )
                         )
-                    }
-                },
-                onStartFailed = {
-                    restoreClaimAfterFailure()
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "DescriptorWriteFailed",
-                                "Failed to initiate descriptor write for $characteristic",
-                                null
+                    },
+                    onDisconnected = {
+                        restoreClaimAfterFailure()
+                        complete(
+                            Result.failure(
+                                FlutterError(
+                                    "Disconnected",
+                                    "Connection lost before the descriptor write was acknowledged",
+                                    null
+                                )
                             )
                         )
-                    )
-                },
-                onDisconnected = {
-                    restoreClaimAfterFailure()
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "Disconnected",
-                                "Connection lost before the descriptor write was acknowledged",
-                                null
-                            )
-                        )
-                    )
-                },
+                    },
+                )
             )
-        )
+        }
     }
 
-    override fun readValue(
+    override suspend fun readValue(
         deviceId: String,
         service: String,
         characteristic: String,
-        callback: (Result<ByteArray>) -> Unit
-    ) {
-        // @async: every terminal GATT path must complete the callback so Dart
-        // never waits indefinitely for a characteristic value event.
+    ): ByteArray {
         val gatt = attachedGatt(deviceId)
-        if (gatt == null) {
-            callback(
-                Result.failure(
-                    FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
-                )
-            )
-            return
-        }
+            ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val gattChar = try {
             gatt.getKnownCharacteristic(service, characteristic)
         } catch (error: FlutterError) {
-            callback(Result.failure(error))
-            return
+            throw error
         }
-        AndroidGattBroker.enqueue(
-            GattOperation(
-                deviceId = deviceId,
-                kind = GattOperationKind.READ_CHARACTERISTIC,
-                client = this,
-                start = { it.readCharacteristic(gattChar) },
-                onComplete = { status, value ->
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        callback(Result.success(value ?: byteArrayOf()))
-                    } else {
-                        callback(
+        return awaitGattCompletion { complete ->
+            AndroidGattBroker.enqueue(
+                GattOperation(
+                    deviceId = deviceId,
+                    kind = GattOperationKind.READ_CHARACTERISTIC,
+                    client = this,
+                    start = { it.readCharacteristic(gattChar) },
+                    onComplete = { status, value ->
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            complete(Result.success(value ?: byteArrayOf()))
+                        } else {
+                            complete(
+                                Result.failure(
+                                    gattError(
+                                        "Characteristic read failed for $characteristic",
+                                        status
+                                    )
+                                )
+                            )
+                        }
+                    },
+                    onStartFailed = {
+                        complete(
                             Result.failure(
-                                gattError(
-                                    "Characteristic read failed for $characteristic",
-                                    status
+                                FlutterError(
+                                    "ReadFailed",
+                                    "Failed to initiate read from $characteristic",
+                                    null
                                 )
                             )
                         )
-                    }
-                },
-                onStartFailed = {
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "ReadFailed",
-                                "Failed to initiate read from $characteristic",
-                                null
+                    },
+                    onDisconnected = {
+                        complete(
+                            Result.failure(
+                                FlutterError(
+                                    "Disconnected",
+                                    "Connection lost before the read was acknowledged",
+                                    null
+                                )
                             )
                         )
-                    )
-                },
-                onDisconnected = {
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "Disconnected",
-                                "Connection lost before the read was acknowledged",
-                                null
-                            )
-                        )
-                    )
-                },
+                    },
+                )
             )
-        )
+        }
     }
 
-    override fun writeValue(
+    override suspend fun writeValue(
         deviceId: String,
         service: String,
         characteristic: String,
         value: ByteArray,
         bleOutputProperty: PlatformBleOutputProperty,
-        callback: (Result<Unit>) -> Unit
     ) {
-        // @async: report guard failures through the callback rather than
-        // throwing, since the generated dispatcher does not catch synchronous
-        // throws for async methods (the reply would never be sent).
         val gatt = attachedGatt(deviceId)
-        if (gatt == null) {
-            callback(
-                Result.failure(
-                    FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
-                )
-            )
-            return
-        }
+            ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val gattChar = try {
             gatt.getKnownCharacteristic(service, characteristic)
         } catch (error: FlutterError) {
-            callback(
-                Result.failure(error)
-            )
-            return
+            throw error
         }
 
         val writeType =
@@ -1149,54 +1076,56 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             else
                 BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        AndroidGattBroker.enqueue(
-            GattOperation(
-                deviceId = deviceId,
-                kind = GattOperationKind.WRITE_CHARACTERISTIC,
-                client = this,
-                start = {
-                    gattChar.writeType = writeType
-                    gattChar.value = value
-                    it.writeCharacteristic(gattChar)
-                },
-                onComplete = { status, _ ->
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        callback(Result.success(Unit))
-                    } else {
-                        callback(
+        awaitGattCompletion { complete ->
+            AndroidGattBroker.enqueue(
+                GattOperation(
+                    deviceId = deviceId,
+                    kind = GattOperationKind.WRITE_CHARACTERISTIC,
+                    client = this,
+                    start = {
+                        gattChar.writeType = writeType
+                        gattChar.value = value
+                        it.writeCharacteristic(gattChar)
+                    },
+                    onComplete = { status, _ ->
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            complete(Result.success(Unit))
+                        } else {
+                            complete(
+                                Result.failure(
+                                    gattError(
+                                        "Characteristic write failed for $characteristic",
+                                        status
+                                    )
+                                )
+                            )
+                        }
+                    },
+                    onStartFailed = {
+                        complete(
                             Result.failure(
-                                gattError(
-                                    "Characteristic write failed for $characteristic",
-                                    status
+                                FlutterError(
+                                    "WriteFailed",
+                                    "Failed to initiate write to $characteristic",
+                                    null
                                 )
                             )
                         )
-                    }
-                },
-                onStartFailed = {
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "WriteFailed",
-                                "Failed to initiate write to $characteristic",
-                                null
+                    },
+                    onDisconnected = {
+                        complete(
+                            Result.failure(
+                                FlutterError(
+                                    "Disconnected",
+                                    "Connection lost before the write was acknowledged",
+                                    null
+                                )
                             )
                         )
-                    )
-                },
-                onDisconnected = {
-                    callback(
-                        Result.failure(
-                            FlutterError(
-                                "Disconnected",
-                                "Connection lost before the write was acknowledged",
-                                null
-                            )
-                        )
-                    )
-                },
+                    },
+                )
             )
-        )
+        }
     }
 
     override fun requestMtu(deviceId: String, expectedMtu: Long) {
@@ -1219,65 +1148,52 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         )
     }
 
-    override fun openL2cap(deviceId: String, psm: Long, callback: (Result<Unit>) -> Unit) {
-        // This method is @async in Pigeon, so every failure path must complete the
-        // callback: throwing would escape the generated handler and leave the Dart
-        // future pending forever.
+    override suspend fun openL2cap(deviceId: String, psm: Long) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            callback(
-                Result.failure(
-                    FlutterError(
-                        "UnsupportedAndroidVersion",
-                        "L2CAP requires Android API 29 or higher",
-                        null
-                    )
-                )
+            throw FlutterError(
+                "UnsupportedAndroidVersion",
+                "L2CAP requires Android API 29 or higher",
+                null
             )
-            return
         }
 
         val gatt = attachedGatt(deviceId)
-        if (gatt == null) {
-            callback(
-                Result.failure(
-                    FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
-                )
-            )
-            return
-        }
+            ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val socket = gatt.device.createInsecureL2capChannel(psm.toInt())
-        val delegate = L2CapStreamDelegate(socket, openedCallback = {
-            callback(Result.success(Unit))
-        }, closedCallback = {
-            mainThreadHandler.post {
-                l2CapSocketEventsListener.onSocketEvent(
-                    PlatformL2CapSocketEvent(
-                        deviceId = gatt.device.address,
-                        closed = true,
+        awaitGattCompletion { complete ->
+            val delegate = L2CapStreamDelegate(socket, openedCallback = {
+                complete(Result.success(Unit))
+            }, closedCallback = {
+                mainThreadHandler.post {
+                    l2CapSocketEventsListener.onSocketEvent(
+                        PlatformL2CapSocketEvent(
+                            deviceId = gatt.device.address,
+                            closed = true,
+                        )
                     )
-                )
-            }
-        }, streamCallback = {
-            mainThreadHandler.post {
-                l2CapSocketEventsListener.onSocketEvent(
-                    PlatformL2CapSocketEvent(
-                        deviceId = gatt.device.address,
-                        data = it,
+                }
+            }, streamCallback = {
+                mainThreadHandler.post {
+                    l2CapSocketEventsListener.onSocketEvent(
+                        PlatformL2CapSocketEvent(
+                            deviceId = gatt.device.address,
+                            data = it,
+                        )
                     )
-                )
-            }
-        }, errorCallback = {
-            mainThreadHandler.post {
-                l2CapSocketEventsListener.onSocketEvent(
-                    PlatformL2CapSocketEvent(
-                        deviceId = gatt.device.address,
-                        error = it.message ?: "",
+                }
+            }, errorCallback = {
+                mainThreadHandler.post {
+                    l2CapSocketEventsListener.onSocketEvent(
+                        PlatformL2CapSocketEvent(
+                            deviceId = gatt.device.address,
+                            error = it.message ?: "",
+                        )
                     )
-                )
-            }
-        })
+                }
+            })
 
-        streamDelegates[gatt.device.address] = delegate
+            streamDelegates[gatt.device.address] = delegate
+        }
     }
 
     override fun closeL2cap(deviceId: String) {
@@ -1299,6 +1215,43 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 null
             )
         delegate.write(value)
+    }
+
+    /**
+     * Bridges the callback-based GATT operation API onto a suspending Pigeon
+     * method: the completer resumes the caller exactly once with the operation's
+     * result, or fails it with the operation's error.
+     */
+    private suspend fun <T> awaitGattCompletion(
+        enqueue: ((Result<T>) -> Unit) -> Unit,
+    ): T = suspendCancellableCoroutine<T> { continuation ->
+        val complete: (Result<T>) -> Unit = { result ->
+            result
+                .onSuccess { value ->
+                    if (continuation.isActive) continuation.resume(value)
+                }
+                .onFailure { error ->
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                }
+        }
+        enqueue(complete)
+    }
+
+    /// Sends a FlutterApi event from a fresh Main coroutine. The generated
+    /// FlutterApi methods suspend until Dart replies, so they can no longer be
+    /// invoked synchronously; replies are best-effort and a failed reply must
+    /// not crash the host.
+    private fun sendToFlutter(block: suspend (QuickBlueFlutterApi) -> Unit) {
+        val api = quickBlueFlutterApi ?: return
+        CoroutineScope(Dispatchers.Main.immediate).launch {
+            try {
+                block(api)
+            } catch (error: FlutterError) {
+                Log.w("QuickBluePlugin", "Flutter did not accept an event: ${error.message}")
+            } catch (error: IllegalStateException) {
+                Log.w("QuickBluePlugin", "FlutterApi send failed: ${error.message}")
+            }
+        }
     }
 
     private fun ensureBluetoothScanPermission() {
@@ -1385,8 +1338,6 @@ class L2CapStreamDelegate(
     private val closed = AtomicBoolean(false)
 
     private var readJob: Job? = null
-
-
 
     init {
         // Launch the main connection and reading logic.

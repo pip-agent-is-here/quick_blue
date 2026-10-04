@@ -1,10 +1,5 @@
 package com.example.quick_blue
 
-import FlutterError
-import PlatformBleInputProperty
-import PlatformConnectionState
-import PlatformGattStatus
-import PlatformServiceDiscovered
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt

@@ -3,6 +3,7 @@ import 'package:pigeon/pigeon.dart';
 @ConfigurePigeon(
   PigeonOptions(
     input: 'pigeons/messages.dart',
+    kotlinOptions: KotlinOptions(package: 'com.example.quick_blue'),
     kotlinOut: 'android/src/main/kotlin/com/example/quick_blue/Messages.g.kt',
     dartOut: 'lib/src/messages.g.dart',
   ),
