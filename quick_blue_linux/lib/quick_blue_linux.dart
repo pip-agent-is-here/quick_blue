@@ -24,6 +24,10 @@ typedef _NotificationSubscriptions = Map<String, _DevicePropertySubscriptions>;
 class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
   final DBusClient _client = DBusClient.system(introspectable: false);
 
+  /// How long to wait for the per-device connection lock before giving up.
+  static const Duration _lockTimeout = Duration(seconds: 10);
+  static const Duration _lockPollInterval = Duration(milliseconds: 10);
+
   @override
   Future<void> attach(String deviceId) async {
     await _withDeviceLock(deviceId, () async {
@@ -59,6 +63,7 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
     Future<void> Function() action,
   ) async {
     final lockName = '${_clientNamePrefix(deviceId)}.Lock';
+    final deadline = DateTime.now().add(_lockTimeout);
     while (true) {
       final reply = await _client.requestName(
         lockName,
@@ -68,7 +73,14 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
           reply == DBusRequestNameReply.alreadyOwner) {
         break;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      if (DateTime.now().isAfter(deadline)) {
+        // A stale lock name would otherwise block attach/detach forever.
+        throw StateError(
+          'Timed out after ${_lockTimeout.inSeconds}s acquiring the quick_blue '
+          'connection lock $lockName',
+        );
+      }
+      await Future<void>.delayed(_lockPollInterval);
     }
     try {
       await action();

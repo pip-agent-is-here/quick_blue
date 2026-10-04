@@ -25,8 +25,12 @@ class L2capChannel {
        _mtuRefreshPending = true;
 
   static const int _pollIntervalMs = 20;
+
+  /// Maximum connect() attempts before giving up, including the retries after a
+  /// security-level downgrade or EINTR.
+  static const int _connectAttemptLimit = 8;
+  // Linux errno values (x86_64; EAGAIN and EWOULDBLOCK share the same number).
   static const int _eagain = 11;
-  static const int _ewouldblock = 11;
   static const int _eintr = 4;
   static const int _eacces = 13;
   static const int _econnreset = 104;
@@ -175,8 +179,18 @@ class L2capChannel {
         calloc.free(addrStruct);
       }
 
-      var currentSecurityLevel = BT_SECURITY_MEDIUM;
+      // _configureSecurity() applies BT_SECURITY_LOW, so the retry state starts at
+      // that level; the loop is bounded so a misbehaving stack cannot spin forever.
+      var currentSecurityLevel = BT_SECURITY_LOW;
+      var attempts = 0;
       while (true) {
+        attempts += 1;
+        if (attempts > _connectAttemptLimit) {
+          throw OSError(
+            'connect (gave up after $_connectAttemptLimit attempts)',
+            libc.errno,
+          );
+        }
         final currentPsm = addrPtr.ref.l2_psm;
         final connectResult = libc.connect(
           fd,
@@ -197,7 +211,9 @@ class L2capChannel {
           continue;
         }
         if (err == _einval && currentPsm == 0) {
-          continue;
+          // PSM 0 asks the kernel for a dynamic PSM, which connect() cannot resolve
+          // here: retrying with the same address spins forever, so report instead.
+          throw OSError('connect with dynamic PSM', err);
         }
         throw OSError('connect', err);
       }
@@ -336,7 +352,7 @@ class L2capChannel {
       }
 
       final err = libc.errno;
-      if (err == _eagain || err == _ewouldblock) {
+      if (err == _eagain) {
         break;
       }
       if (err == _eintr) {
@@ -415,7 +431,7 @@ class L2capChannel {
             return false;
           }
           final err = libc.errno;
-          if (err == _eagain || err == _ewouldblock) {
+          if (err == _eagain) {
             frame.offset = offset;
             return false;
           }
