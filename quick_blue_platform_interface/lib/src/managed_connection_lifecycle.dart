@@ -214,7 +214,7 @@ class _ManagedConnection {
   Future<T> _untilStopped<T>(Future<T> operation) {
     return _stopSignal.race<T>(
       operation,
-      cancellationError: const _ManagedConnectionStopped(),
+      cancellationError: () => const _ManagedConnectionStopped(),
     );
   }
 

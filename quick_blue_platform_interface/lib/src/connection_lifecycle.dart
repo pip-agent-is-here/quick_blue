@@ -264,6 +264,6 @@ class _ConnectionOperationCancellation {
     Future<T> operation, {
     required QuickBlueException error,
   }) {
-    return _signal.race<T>(operation, cancellationError: error);
+    return _signal.race<T>(operation, cancellationError: () => error);
   }
 }
