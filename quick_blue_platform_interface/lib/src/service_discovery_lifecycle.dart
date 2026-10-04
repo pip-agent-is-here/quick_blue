@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 
 import '../models.dart';
 import 'quick_blue_exception.dart';
+import 'cancellation_signal.dart';
 import 'service_discovery_event.dart';
 
 @internal
@@ -152,20 +153,29 @@ class _ServiceDiscoveryOperation {
   _ServiceDiscoveryOperation(this.deviceId);
 
   final String deviceId;
-  final _cancelled = Completer<QuickBlueException>();
+  final CancellationSignal _signal = CancellationSignal();
+  QuickBlueException? _cancellationError;
   late final Future<List<BluetoothService>> completed;
 
+  bool get isCancelled => _signal.isCancelled;
+
   void cancel(QuickBlueException error) {
-    if (!_cancelled.isCompleted) {
-      _cancelled.complete(error);
-    }
+    _cancellationError = error;
+    _signal.cancel();
   }
 
   Future<T> untilCancelled<T>(Future<T> operation) {
-    return Future.any<T>(<Future<T>>[
+    return _signal.race<T>(
       operation,
-      _cancelled.future.then<T>((error) => throw error),
-    ]);
+      cancellationError:
+          _cancellationError ??
+          QuickBlueException(
+            code: QuickBlueErrorCode.cancelled,
+            operation: 'discoverServices',
+            deviceId: deviceId,
+            message: 'Service discovery was cancelled for $deviceId.',
+          ),
+    );
   }
 }
 

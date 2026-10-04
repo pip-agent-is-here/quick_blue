@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:meta/meta.dart';
 
 import '../models.dart';
+import 'cancellation_signal.dart';
 import 'observability.dart';
 import 'quick_blue_exception.dart';
 
@@ -226,21 +227,16 @@ class _ConnectionOperation {
 }
 
 class _ConnectionOperationCancellation {
-  final _completer = Completer<void>();
+  final CancellationSignal _signal = CancellationSignal();
 
-  void cancel() {
-    if (!_completer.isCompleted) {
-      _completer.complete();
-    }
-  }
+  bool get isCancelled => _signal.isCancelled;
+
+  void cancel() => _signal.cancel();
 
   Future<T> untilCancelled<T>(
     Future<T> operation, {
     required QuickBlueException error,
   }) {
-    return Future.any<T>(<Future<T>>[
-      operation,
-      _completer.future.then<T>((_) => throw error),
-    ]);
+    return _signal.race<T>(operation, cancellationError: error);
   }
 }
