@@ -265,6 +265,71 @@ final class QuickBlueOperation {
   final List<String>? serviceUuids;
 }
 
+/// Optional context fields shared by every operation entry point.
+///
+/// Adding a field means adding it here and to [QuickBlueOperation] (the
+/// observation contract); the forwarding boilerplate this replaces used to exist
+/// in three places, where a missed one silently dropped the field from
+/// observations.
+final class _OperationContext {
+  const _OperationContext({
+    this.deviceId,
+    this.serviceId,
+    this.characteristicId,
+    this.scanFilter,
+    this.scanOptions,
+    this.inputProperty,
+    this.outputProperty,
+    this.targetBondState,
+    this.maintainState,
+    this.valueSize,
+    this.requestedMtu,
+    this.l2capPsm,
+    this.associationId,
+    this.serviceUuids,
+  });
+
+  final String? deviceId;
+  final String? serviceId;
+  final String? characteristicId;
+  final ScanFilter? scanFilter;
+  final ScanOptions? scanOptions;
+  final BleInputProperty? inputProperty;
+  final BleOutputProperty? outputProperty;
+  final BluetoothBondState? targetBondState;
+  final bool? maintainState;
+  final int? valueSize;
+  final int? requestedMtu;
+  final int? l2capPsm;
+  final int? associationId;
+  final List<String>? serviceUuids;
+
+  /// Builds the observer-facing operation from this context and [kind].
+  QuickBlueOperation operation(
+    QuickBlueOperationKind kind,
+    DateTime startTime,
+  ) {
+    return QuickBlueOperation(
+      kind: kind,
+      startTime: startTime,
+      deviceId: deviceId,
+      serviceId: serviceId,
+      characteristicId: characteristicId,
+      scanFilter: scanFilter,
+      scanOptions: scanOptions,
+      inputProperty: inputProperty,
+      outputProperty: outputProperty,
+      targetBondState: targetBondState,
+      maintainState: maintainState,
+      valueSize: valueSize,
+      requestedMtu: requestedMtu,
+      l2capPsm: l2capPsm,
+      associationId: associationId,
+      serviceUuids: serviceUuids,
+    );
+  }
+}
+
 /// Export-safe metadata derived from a failed Quick Blue operation.
 ///
 /// This deliberately excludes messages, device identifiers, arbitrary native
@@ -517,11 +582,7 @@ final class QuickBlueInstrumentation {
     List<String>? serviceUuids,
     Map<QuickBlueOperationMeasurement, num> Function(T value)? measurements,
   }) {
-    if (observer == null) {
-      return action();
-    }
-    final scope = startOperation(
-      kind,
+    final context = _OperationContext(
       deviceId: deviceId,
       serviceId: serviceId,
       characteristicId: characteristicId,
@@ -537,6 +598,10 @@ final class QuickBlueInstrumentation {
       associationId: associationId,
       serviceUuids: serviceUuids,
     );
+    if (observer == null) {
+      return action();
+    }
+    final scope = _startOperation(kind, context);
     late final Future<T> future;
     try {
       future = action();
@@ -654,6 +719,34 @@ final class QuickBlueInstrumentation {
     int? associationId,
     List<String>? serviceUuids,
   }) {
+    return _startOperation(
+      kind,
+      _OperationContext(
+        deviceId: deviceId,
+        serviceId: serviceId,
+        characteristicId: characteristicId,
+        scanFilter: scanFilter,
+        scanOptions: scanOptions,
+        inputProperty: inputProperty,
+        outputProperty: outputProperty,
+        targetBondState: targetBondState,
+        maintainState: maintainState,
+        valueSize: valueSize,
+        requestedMtu: requestedMtu,
+        l2capPsm: l2capPsm,
+        associationId: associationId,
+        serviceUuids: serviceUuids,
+      ),
+    );
+  }
+
+  /// Internal entry shared by [startOperation] and [observeFuture]: the context
+  /// is built once and the observation is constructed from it, so a new context
+  /// field reaches observers without further coordinated edits.
+  static QuickBlueOperationScope _startOperation(
+    QuickBlueOperationKind kind,
+    _OperationContext context,
+  ) {
     final currentObserver = observer;
     if (currentObserver == null) {
       return QuickBlueOperationScope._disabled();
@@ -663,24 +756,7 @@ final class QuickBlueInstrumentation {
     QuickBlueOperationObservation? observation;
     try {
       observation = currentObserver.onOperationStarted(
-        QuickBlueOperation(
-          kind: kind,
-          startTime: DateTime.now().toUtc(),
-          deviceId: deviceId,
-          serviceId: serviceId,
-          characteristicId: characteristicId,
-          scanFilter: scanFilter,
-          scanOptions: scanOptions,
-          inputProperty: inputProperty,
-          outputProperty: outputProperty,
-          targetBondState: targetBondState,
-          maintainState: maintainState,
-          valueSize: valueSize,
-          requestedMtu: requestedMtu,
-          l2capPsm: l2capPsm,
-          associationId: associationId,
-          serviceUuids: serviceUuids,
-        ),
+        context.operation(kind, DateTime.now().toUtc()),
       );
     } on Object {
       stopwatch.stop();
