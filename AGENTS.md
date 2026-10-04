@@ -68,6 +68,10 @@ surface is shared or platform-specific.
   files with `git diff`.
 - Platform implementation changes: run the affected package tests and build or
   smoke-test the matching platform when available.
+- Darwin source changes: type-check the plugin and generated sources on Linux
+  with `quick_blue_darwin/darwin/quick_blue_darwin/type_check/run.sh`, which
+  compiles them against signature-faithful stubs so a protocol/conformance break
+  fails without a macOS host (CI runs it too).
 
 Common repo checks:
 
