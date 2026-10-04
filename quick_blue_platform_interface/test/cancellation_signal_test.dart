@@ -105,21 +105,23 @@ void main() {
     },
   );
 
-  test('the cancellation error factory is not called without a cancellation', (
-  ) async {
-    final signal = CancellationSignal();
-    var calls = 0;
+  test(
+    'the cancellation error factory is not called without a cancellation',
+    () async {
+      final signal = CancellationSignal();
+      var calls = 0;
 
-    expect(
-      await signal.race<int>(
-        Future<int>.value(3),
-        cancellationError: () {
-          calls += 1;
-          return StateError('cancelled');
-        },
-      ),
-      3,
-    );
-    expect(calls, 0);
-  });
+      expect(
+        await signal.race<int>(
+          Future<int>.value(3),
+          cancellationError: () {
+            calls += 1;
+            return StateError('cancelled');
+          },
+        ),
+        3,
+      );
+      expect(calls, 0);
+    },
+  );
 }
