@@ -160,6 +160,11 @@ class _ServiceDiscoveryOperation {
   bool get isCancelled => _signal.isCancelled;
 
   void cancel(QuickBlueException error) {
+    // Keep the first reason: the race resolves the error only once the signal
+    // fires, so a later cancel must not be able to rewrite it.
+    if (_signal.isCancelled) {
+      return;
+    }
     _cancellationError = error;
     _signal.cancel();
   }
@@ -167,7 +172,7 @@ class _ServiceDiscoveryOperation {
   Future<T> untilCancelled<T>(Future<T> operation) {
     return _signal.race<T>(
       operation,
-      cancellationError:
+      cancellationError: () =>
           _cancellationError ??
           QuickBlueException(
             code: QuickBlueErrorCode.cancelled,

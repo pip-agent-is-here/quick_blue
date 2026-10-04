@@ -23,15 +23,23 @@ final class CancellationSignal {
     }
   }
 
-  /// Completes with [operation]'s result, or throws [cancellationError] if the
-  /// signal fires first.
+  /// Completes with [operation]'s result, or throws the error returned by
+  /// [cancellationError] if the signal fires first.
+  ///
+  /// [cancellationError] is a factory, not a value: it is only called once the
+  /// signal has fired. A caller that learns *why* the operation was cancelled at
+  /// cancel time — a disconnect, a changed GATT database — must therefore still
+  /// report that specific reason even though the race was set up earlier.
   ///
   /// If [operation] itself fails first, its error propagates untouched — a
   /// genuine platform failure must not be masked by a later cancellation.
-  Future<T> race<T>(Future<T> operation, {required Object cancellationError}) {
+  Future<T> race<T>(
+    Future<T> operation, {
+    required Object Function() cancellationError,
+  }) {
     return Future.any<T>(<Future<T>>[
       operation,
-      _signal.future.then<T>((_) => throw cancellationError),
+      _signal.future.then<T>((_) => throw cancellationError()),
     ]);
   }
 }

@@ -579,6 +579,76 @@ void main() {
     },
   );
 
+  test(
+    'a disconnect while the native discovery start is still pending reports '
+    'the disconnect',
+    () async {
+      final platform = FakeQuickBluePlatform(
+        discoverServicesCompletion: Completer<void>(),
+      );
+      addTearDown(platform.dispose);
+
+      final discovery = platform.device('device-a').discoverServices();
+      await pumpEventQueue();
+
+      platform.handleConnectionStateChanged(
+        'device-a',
+        BlueConnectionState.disconnected,
+        BleStatus.success,
+      );
+
+      await expectLater(
+        discovery,
+        throwsA(
+          isA<QuickBlueException>()
+              .having(
+                (error) => error.code,
+                'code',
+                QuickBlueErrorCode.cancelled,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                contains('because the device disconnected'),
+              ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'a GATT services change while the native discovery start is still pending '
+    'reports the change',
+    () async {
+      final platform = FakeQuickBluePlatform(
+        discoverServicesCompletion: Completer<void>(),
+      );
+      addTearDown(platform.dispose);
+
+      final discovery = platform.device('device-a').discoverServices();
+      await pumpEventQueue();
+
+      platform.handleGattServicesChanged('device-a');
+
+      await expectLater(
+        discovery,
+        throwsA(
+          isA<QuickBlueException>()
+              .having(
+                (error) => error.code,
+                'code',
+                QuickBlueErrorCode.cancelled,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                contains('because its GATT service database changed'),
+              ),
+        ),
+      );
+    },
+  );
+
   test('BluetoothDevice.setNotifiable propagates platform errors', () async {
     final error = StateError('notify failed');
     final platform = FakeQuickBluePlatform(setNotifiableError: error);
