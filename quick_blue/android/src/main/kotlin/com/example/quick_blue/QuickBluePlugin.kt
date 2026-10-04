@@ -132,25 +132,10 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         QuickBlueApi.setUp(binding.binaryMessenger, null)
         quickBlueFlutterApi = null
 
-        // Fail any pairing still awaiting a bond-state broadcast instead of leaving
-        // those @async callbacks pending forever.
-        val abandonedPairings = synchronized(bondLock) {
-            val pending = pendingPairCallbacks.mapValues { it.value.toList() }
-            pendingPairCallbacks.clear()
-            pending
-        }
-        abandonedPairings.forEach { (deviceId, callbacks) ->
-            callbacks.forEach {
-                it(
-                    Result.failure(
-                        FlutterError(
-                            "BondFailed",
-                            "Engine detached while pairing $deviceId",
-                            null
-                        )
-                    )
-                )
-            }
+        // Fail any pairing still awaiting a bond-state broadcast instead of
+        // leaving those @async callbacks pending forever.
+        pendingPairRegistry.failAll { deviceId ->
+            "Engine detached while pairing $deviceId"
         }
 
         try {
@@ -210,9 +195,11 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
 
     private val executor: Executor = Executor { it.run() }
     private val streamDelegates = mutableMapOf<String, L2CapStreamDelegate>()
-    private val bondLock = Any()
-    private val pendingPairCallbacks =
-        mutableMapOf<String, MutableList<(Result<Unit>) -> Unit>>()
+    private val pendingPairRegistry = PendingPairRegistry(
+        scheduleTimeout = { action ->
+            mainThreadHandler.postDelayed(action, PAIRING_TIMEOUT_MILLIS)
+        },
+    )
 
     private inner class BondStateReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -236,69 +223,14 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 )
             )
             when (state) {
-                BluetoothDevice.BOND_BONDED -> completePendingPair(
+                BluetoothDevice.BOND_BONDED -> pendingPairRegistry.complete(
                     device.address,
                     Result.success(Unit)
                 )
-                BluetoothDevice.BOND_NONE -> completePendingPair(
+                BluetoothDevice.BOND_NONE -> pendingPairRegistry.fail(
                     device.address,
-                    Result.failure(
-                        FlutterError(
-                            "BondFailed",
-                            "Pairing failed for ${device.address}",
-                            null
-                        )
-                    )
+                    "Pairing failed for ${device.address}"
                 )
-            }
-        }
-    }
-
-    private fun completePendingPair(deviceId: String, result: Result<Unit>) {
-        val callbacks = synchronized(bondLock) {
-            pendingPairCallbacks.remove(deviceId)?.toList() ?: emptyList()
-        }
-        callbacks.forEach { it(result) }
-    }
-
-    private fun registerPendingPairCallback(
-        device: BluetoothDevice,
-        callback: (Result<Unit>) -> Unit,
-    ) {
-        synchronized(bondLock) {
-            pendingPairCallbacks.getOrPut(device.address) { mutableListOf() }.add(callback)
-        }
-        // A device that never reports a terminal bond state would otherwise leave
-        // this @async callback pending for the lifetime of the engine.
-        mainThreadHandler.postDelayed({
-            val expired = synchronized(bondLock) {
-                val callbacks = pendingPairCallbacks[device.address]
-                if (callbacks == null || !callbacks.remove(callback)) {
-                    false
-                } else {
-                    if (callbacks.isEmpty()) pendingPairCallbacks.remove(device.address)
-                    true
-                }
-            }
-            if (expired) {
-                callback(
-                    Result.failure(
-                        FlutterError(
-                            "BondFailed",
-                            "Timed out waiting for pairing with ${device.address}",
-                            null
-                        )
-                    )
-                )
-            }
-        }, PAIRING_TIMEOUT_MILLIS)
-    }
-
-    private fun removePendingPairCallback(deviceId: String, callback: (Result<Unit>) -> Unit) {
-        synchronized(bondLock) {
-            pendingPairCallbacks[deviceId]?.remove(callback)
-            if (pendingPairCallbacks[deviceId]?.isEmpty() == true) {
-                pendingPairCallbacks.remove(deviceId)
             }
         }
     }
@@ -503,36 +435,29 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         ensureBluetoothScanPermission()
         activeScanRssi = rssi
 
-        val manufacturerDataFilter = manufacturerData?.entries?.firstOrNull()
-        val serviceUuidFilters: List<String?> =
-            serviceUuids?.ifEmpty { null } ?: listOf(null)
-        val serviceDataFilters: List<Map.Entry<String, ByteArray>?> =
-            serviceData?.entries?.toList()?.ifEmpty { null } ?: listOf(null)
-        val hasNativeFilters =
-            serviceUuids?.isNotEmpty() == true ||
-                serviceData?.isNotEmpty() == true ||
-                manufacturerDataFilter != null
+        val specs = scanFilterSpecs(serviceUuids, serviceData, manufacturerData)
+        val hasNativeFilters = specs.any { spec ->
+            spec.serviceUuid != null ||
+                spec.serviceDataUuid != null ||
+                spec.manufacturerId != null
+        }
         val filters = if (hasNativeFilters) {
-            serviceUuidFilters.flatMap { serviceUuid ->
-                serviceDataFilters.map { serviceDataFilter ->
-                    val builder = ScanFilter.Builder()
-                    serviceUuid?.let {
-                        builder.setServiceUuid(ParcelUuid(it.toBluetoothUuid()))
-                    }
-                    serviceDataFilter?.let {
-                        builder.setServiceData(
-                            ParcelUuid(it.key.toBluetoothUuid()),
-                            it.value
-                        )
-                    }
-                    if (manufacturerDataFilter != null) {
-                        builder.setManufacturerData(
-                            manufacturerDataFilter.key.toInt(),
-                            manufacturerDataFilter.value
-                        )
-                    }
-                    builder.build()
+            specs.map { spec ->
+                val builder = ScanFilter.Builder()
+                spec.serviceUuid?.let {
+                    builder.setServiceUuid(ParcelUuid(it.toBluetoothUuid()))
                 }
+                spec.serviceDataUuid?.let { uuid ->
+                    spec.serviceData?.let { data ->
+                        builder.setServiceData(ParcelUuid(uuid.toBluetoothUuid()), data)
+                    }
+                }
+                spec.manufacturerId?.let { id ->
+                    spec.manufacturerData?.let { data ->
+                        builder.setManufacturerData(id.toInt(), data)
+                    }
+                }
+                builder.build()
             }
         } else {
             null
@@ -657,9 +582,9 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                         }
                 }
                 continuation.invokeOnCancellation {
-                    removePendingPairCallback(device.address, completer)
+                    pendingPairRegistry.remove(device.address, completer)
                 }
-                registerPendingPairCallback(device, completer)
+                pendingPairRegistry.register(device.address, completer)
 
                 if (device.bondState == BluetoothDevice.BOND_BONDING) {
                     return@suspendCancellableCoroutine Unit
@@ -668,7 +593,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 val started = try {
                     device.createBond()
                 } catch (error: Throwable) {
-                    removePendingPairCallback(device.address, completer)
+                    pendingPairRegistry.remove(device.address, completer)
                     if (continuation.isActive) {
                         continuation.resumeWithException(
                             FlutterError(
@@ -681,7 +606,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                     return@suspendCancellableCoroutine Unit
                 }
                 if (!started) {
-                    removePendingPairCallback(device.address, completer)
+                    pendingPairRegistry.remove(device.address, completer)
                     if (continuation.isActive) {
                         continuation.resumeWithException(
                             FlutterError(
@@ -847,22 +772,17 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
     private fun buildBleDeviceFilters(
         filter: PlatformBleCompanionFilter
     ): List<BluetoothLeDeviceFilter> {
-        val serviceUuids: List<String?> =
-            if (filter.serviceUuids.isEmpty()) listOf(null) else filter.serviceUuids
-        val manufacturerDataFilters =
-            filter.manufacturerData?.entries?.map { it }
-                ?.ifEmpty { listOf(null) }
-                ?: listOf(null)
-
-        return serviceUuids.flatMap { serviceUuid ->
-            manufacturerDataFilters.map { manufacturerDataFilter ->
+        return scanFilterSpecs(filter.serviceUuids, null, filter.manufacturerData)
+            .map { spec ->
                 val scanFilterBuilder = ScanFilter.Builder()
                 filter.deviceId?.let { scanFilterBuilder.setDeviceAddress(it) }
-                serviceUuid?.let {
+                spec.serviceUuid?.let {
                     scanFilterBuilder.setServiceUuid(ParcelUuid.fromString(it))
                 }
-                manufacturerDataFilter?.let {
-                    scanFilterBuilder.setManufacturerData(it.key.toInt(), it.value)
+                spec.manufacturerId?.let { id ->
+                    spec.manufacturerData?.let { data ->
+                        scanFilterBuilder.setManufacturerData(id.toInt(), data)
+                    }
                 }
 
                 val deviceFilterBuilder = BluetoothLeDeviceFilter.Builder()
@@ -872,7 +792,6 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 }
                 deviceFilterBuilder.build()
             }
-        }
     }
 
     override fun discoverServices(deviceId: String) {
