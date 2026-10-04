@@ -61,15 +61,20 @@ void main() {
     );
   }
 
-  /// Emits a bond-state change for [deviceId]. The controller is captured by
-  /// value so a delayed event can never leak into a later test.
-  void emitBondState(BluetoothBondState state, {Duration? after}) {
+  /// Emits a bond-state change for [forDevice] (this device by default). The
+  /// controller is captured by value so a delayed event can never leak into a
+  /// later test.
+  void emitBondState(
+    BluetoothBondState state, {
+    Duration? after,
+    String? forDevice,
+  }) {
     final controller = events;
     void send() {
       if (!controller.isClosed) {
         controller.add(
           BluetoothBondStateChange(
-            deviceId: deviceId,
+            deviceId: forDevice ?? deviceId,
             state: state,
             previousState: BluetoothBondState.notBonded,
           ),
@@ -177,6 +182,10 @@ void main() {
   );
 
   test('an implicit bond that starts then completes is recovered', () async {
+    // The initial read has to report notBonded: with a bonding first snapshot
+    // perform() takes the initial-bonding branch and the implicit-bond path
+    // this test claims to cover is never entered.
+    queuedStates = <BluetoothBondState>[BluetoothBondState.notBonded];
     steadyState = BluetoothBondState.bonding;
     emitBondState(
       BluetoothBondState.bonding,
@@ -191,10 +200,19 @@ void main() {
       await buildRecovery().perform(deviceId),
       QuickBlueSecurityRecoveryResult.recovered,
     );
-    expect(pairingCalls, 0);
+    expect(
+      pairingCalls,
+      0,
+      reason:
+          'an implicit bond must be handled without starting an explicit '
+          'pairing',
+    );
   });
 
   test('an implicit bond that starts and fails asks the user', () async {
+    // Same fixture rule as above: the first snapshot must be notBonded so the
+    // implicit-bond branch is the one under test.
+    queuedStates = <BluetoothBondState>[BluetoothBondState.notBonded];
     steadyState = BluetoothBondState.bonding;
     emitBondState(
       BluetoothBondState.bonding,
@@ -209,7 +227,13 @@ void main() {
       await buildRecovery().perform(deviceId),
       QuickBlueSecurityRecoveryResult.userActionRequired,
     );
-    expect(pairingCalls, 0);
+    expect(
+      pairingCalls,
+      0,
+      reason:
+          'an implicit bond must be handled without starting an explicit '
+          'pairing',
+    );
   });
 
   test('an explicit pairing that reaches bonded is recovered', () async {
@@ -312,17 +336,18 @@ void main() {
   });
 
   test('a state change for another device is ignored', () async {
-    events.add(
-      const BluetoothBondStateChange(
-        deviceId: 'device-b',
-        state: BluetoothBondState.bonded,
-        previousState: BluetoothBondState.notBonded,
-      ),
+    // The event must arrive after perform() has subscribed, otherwise it is
+    // dropped by the broadcast controller and the device filter is untested.
+    emitBondState(
+      BluetoothBondState.bonded,
+      after: const Duration(milliseconds: 10),
+      forDevice: 'device-b',
     );
 
     expect(
       await buildRecovery().perform(deviceId),
       QuickBlueSecurityRecoveryResult.userActionRequired,
+      reason: 'another device reporting bonded must not answer for this device',
     );
   });
 }
