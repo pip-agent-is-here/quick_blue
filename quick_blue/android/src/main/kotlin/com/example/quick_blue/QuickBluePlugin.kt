@@ -84,9 +84,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
 
 private const val SELECT_DEVICE_REQUEST_CODE = 10011
+private const val PAIRING_TIMEOUT_MILLIS = 30_000L
 
 private fun gattError(message: String, status: Int): FlutterError {
     return FlutterError(
@@ -153,6 +155,28 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
 
         QuickBlueApi.setUp(binding.binaryMessenger, null)
         quickBlueFlutterApi = null
+
+        // Fail any pairing still awaiting a bond-state broadcast instead of leaving
+        // those @async callbacks pending forever.
+        val abandonedPairings = synchronized(bondLock) {
+            val pending = pendingPairCallbacks.mapValues { it.value.toList() }
+            pendingPairCallbacks.clear()
+            pending
+        }
+        abandonedPairings.forEach { (deviceId, callbacks) ->
+            callbacks.forEach {
+                it(
+                    Result.failure(
+                        FlutterError(
+                            "BondFailed",
+                            "Engine detached while pairing $deviceId",
+                            null
+                        )
+                    )
+                )
+            }
+        }
+
         try {
             context.unregisterReceiver(bondStateReceiver)
         } catch (_: IllegalArgumentException) {
@@ -259,6 +283,48 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
             pendingPairCallbacks.remove(deviceId)?.toList() ?: emptyList()
         }
         callbacks.forEach { it(result) }
+    }
+
+    private fun registerPendingPairCallback(
+        device: BluetoothDevice,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        synchronized(bondLock) {
+            pendingPairCallbacks.getOrPut(device.address) { mutableListOf() }.add(callback)
+        }
+        // A device that never reports a terminal bond state would otherwise leave
+        // this @async callback pending for the lifetime of the engine.
+        mainThreadHandler.postDelayed({
+            val expired = synchronized(bondLock) {
+                val callbacks = pendingPairCallbacks[device.address]
+                if (callbacks == null || !callbacks.remove(callback)) {
+                    false
+                } else {
+                    if (callbacks.isEmpty()) pendingPairCallbacks.remove(device.address)
+                    true
+                }
+            }
+            if (expired) {
+                callback(
+                    Result.failure(
+                        FlutterError(
+                            "BondFailed",
+                            "Timed out waiting for pairing with ${device.address}",
+                            null
+                        )
+                    )
+                )
+            }
+        }, PAIRING_TIMEOUT_MILLIS)
+    }
+
+    private fun removePendingPairCallback(deviceId: String, callback: (Result<Unit>) -> Unit) {
+        synchronized(bondLock) {
+            pendingPairCallbacks[deviceId]?.remove(callback)
+            if (pendingPairCallbacks[deviceId]?.isEmpty() == true) {
+                pendingPairCallbacks.remove(deviceId)
+            }
+        }
     }
 
     override fun emitConnectionState(
@@ -606,28 +672,17 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
                 return
             }
             BluetoothDevice.BOND_BONDING -> {
-                synchronized(bondLock) {
-                    pendingPairCallbacks.getOrPut(device.address) { mutableListOf() }
-                        .add(callback)
-                }
+                registerPendingPairCallback(device, callback)
                 return
             }
         }
 
-        synchronized(bondLock) {
-            pendingPairCallbacks.getOrPut(device.address) { mutableListOf() }
-                .add(callback)
-        }
+        registerPendingPairCallback(device, callback)
 
         val started = try {
             device.createBond()
         } catch (error: Throwable) {
-            synchronized(bondLock) {
-                pendingPairCallbacks[device.address]?.remove(callback)
-                if (pendingPairCallbacks[device.address]?.isEmpty() == true) {
-                    pendingPairCallbacks.remove(device.address)
-                }
-            }
+            removePendingPairCallback(device.address, callback)
             callback(
                 Result.failure(
                     FlutterError(
@@ -641,12 +696,7 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         }
 
         if (!started) {
-            synchronized(bondLock) {
-                pendingPairCallbacks[device.address]?.remove(callback)
-                if (pendingPairCallbacks[device.address]?.isEmpty() == true) {
-                    pendingPairCallbacks.remove(device.address)
-                }
-            }
+            removePendingPairCallback(device.address, callback)
             callback(
                 Result.failure(
                     FlutterError(
@@ -680,15 +730,31 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
             return
         }
 
-        val pairingRequestBuilder = AssociationRequest.Builder()
-            .setSingleDevice(request.singleDevice)
-        val filters = request.filters.flatMap(::buildBleDeviceFilters)
-        if (filters.isEmpty()) {
-            pairingRequestBuilder.addDeviceFilter(BluetoothLeDeviceFilter.Builder().build())
-        } else {
-            filters.forEach { pairingRequestBuilder.addDeviceFilter(it) }
+        val pairingRequest = try {
+            val pairingRequestBuilder = AssociationRequest.Builder()
+                .setSingleDevice(request.singleDevice)
+            val filters = request.filters.flatMap(::buildBleDeviceFilters)
+            if (filters.isEmpty()) {
+                pairingRequestBuilder.addDeviceFilter(BluetoothLeDeviceFilter.Builder().build())
+            } else {
+                filters.forEach { pairingRequestBuilder.addDeviceFilter(it) }
+            }
+            pairingRequestBuilder.build()
+        } catch (e: Exception) {
+            // Malformed filters (ParcelUuid/Pattern) must fail the callback rather
+            // than throw: companionAssociate is @async in Pigeon, so an exception
+            // escaping this method would leave the Dart future pending forever.
+            callback(
+                Result.failure(
+                    FlutterError(
+                        "AssociationFailed",
+                        e.message ?: "Unable to build the companion device association request",
+                        null
+                    )
+                )
+            )
+            return
         }
-        val pairingRequest = pairingRequestBuilder.build()
 
         var completed = false
         fun complete(result: Result<PlatformCompanionAssociation?>) {
@@ -697,56 +763,69 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
             callback(result)
         }
 
-        companionDeviceManager.associate(
-            pairingRequest,
-            executor,
-            object : CompanionDeviceManager.Callback() {
-                override fun onAssociationPending(intentSender: IntentSender) {
-                    val currentActivity = activity
-                    if (currentActivity == null) {
+        try {
+            companionDeviceManager.associate(
+                pairingRequest,
+                executor,
+                object : CompanionDeviceManager.Callback() {
+                    override fun onAssociationPending(intentSender: IntentSender) {
+                        val currentActivity = activity
+                        if (currentActivity == null) {
+                            complete(
+                                Result.failure(
+                                    FlutterError(
+                                        "AssociationFailed",
+                                        "Companion device association requires an attached Activity",
+                                        null
+                                    )
+                                )
+                            )
+                            return
+                        }
+                        startIntentSenderForResult(
+                            currentActivity,
+                            intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+                        )
+                    }
+
+                    override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                        complete(
+                            Result.success(
+                                PlatformCompanionAssociation(
+                                    id = associationInfo.id.toLong(),
+                                    deviceId = associationInfo.deviceMacAddress?.toString(),
+                                    displayName = associationInfo.displayName?.toString(),
+                                    deviceProfile = associationInfo.deviceProfile,
+                                )
+                            )
+                        )
+                    }
+
+                    override fun onFailure(errorMessage: CharSequence?) {
                         complete(
                             Result.failure(
                                 FlutterError(
                                     "AssociationFailed",
-                                    "Companion device association requires an attached Activity",
+                                    errorMessage.toString(),
                                     null
                                 )
                             )
                         )
-                        return
                     }
-                    startIntentSenderForResult(
-                        currentActivity,
-                        intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
-                    )
                 }
-
-                override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                    complete(
-                        Result.success(
-                            PlatformCompanionAssociation(
-                                id = associationInfo.id.toLong(),
-                                deviceId = associationInfo.deviceMacAddress?.toString(),
-                                displayName = associationInfo.displayName?.toString(),
-                                deviceProfile = associationInfo.deviceProfile,
-                            )
-                        )
+            )
+        } catch (e: Exception) {
+            // SecurityException when REQUEST_COMPANION_* permissions are missing.
+            complete(
+                Result.failure(
+                    FlutterError(
+                        "AssociationFailed",
+                        e.message ?: "Unable to start companion device association",
+                        null
                     )
-                }
-
-                override fun onFailure(errorMessage: CharSequence?) {
-                    complete(
-                        Result.failure(
-                            FlutterError(
-                                "AssociationFailed",
-                                errorMessage.toString(),
-                                null
-                            )
-                        )
-                    )
-                }
-            }
-        )
+                )
+            )
+        }
     }
 
     override fun companionDisassociate(associationId: Long) {
@@ -1141,16 +1220,31 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
     }
 
     override fun openL2cap(deviceId: String, psm: Long, callback: (Result<Unit>) -> Unit) {
+        // This method is @async in Pigeon, so every failure path must complete the
+        // callback: throwing would escape the generated handler and leave the Dart
+        // future pending forever.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            throw FlutterError(
-                "UnsupportedAndroidVersion",
-                "L2CAP requires Android API 29 or higher",
-                null
+            callback(
+                Result.failure(
+                    FlutterError(
+                        "UnsupportedAndroidVersion",
+                        "L2CAP requires Android API 29 or higher",
+                        null
+                    )
+                )
             )
+            return
         }
 
         val gatt = attachedGatt(deviceId)
-            ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
+        if (gatt == null) {
+            callback(
+                Result.failure(
+                    FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                )
+            )
+            return
+        }
         val socket = gatt.device.createInsecureL2capChannel(psm.toInt())
         val delegate = L2CapStreamDelegate(socket, openedCallback = {
             callback(Result.success(Unit))
@@ -1285,6 +1379,11 @@ class L2CapStreamDelegate(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val writeDispatcher = newSingleThreadContext("L2CapWriteThread")
 
+    // Terminal callbacks (error/closed) are delivered from this scope, which is
+    // never cancelled, so they cannot be lost when `scope` is torn down.
+    private val callbackScope = CoroutineScope(Dispatchers.Main)
+    private val closed = AtomicBoolean(false)
+
     private var readJob: Job? = null
 
 
@@ -1360,16 +1459,20 @@ class L2CapStreamDelegate(
     }
 
     private fun handleError(e: Exception) {
-        // Ensure error callback is on the main thread
-        scope.launch(Dispatchers.Main) {
+        // Deliver from callbackScope: launching inside `scope` and then cancelling
+        // it in closeConnection() would drop the error event.
+        callbackScope.launch {
             errorCallback(e)
         }
         closeConnection()
     }
 
     private fun closeConnection() {
+        // Idempotent: the read loop's finally block, handleError() and an explicit
+        // close() can all reach this, but each terminal callback fires at most once.
+        if (!closed.compareAndSet(false, true)) return
+
         // Cancels all coroutines started in this scope (including the read loop).
-        // It's idempotent; calling it multiple times has no effect.
         scope.cancel()
         writeDispatcher.close()
 
@@ -1379,9 +1482,8 @@ class L2CapStreamDelegate(
             // Can be ignored, as we are cleaning up anyway.
         }
 
-        // Use a new coroutine on the Main dispatcher to ensure the callback
-        // is not called from a cancelled scope.
-        CoroutineScope(Dispatchers.Main).launch {
+        // callbackScope is never cancelled, so this callback cannot be lost.
+        callbackScope.launch {
             closedCallback()
         }
     }
@@ -1480,9 +1582,13 @@ class BluetoothStateListener(
 
     private fun registerReceiver() {
         if (receiverRegistered) return
-        context.registerReceiver(
+        // API 34+ throws SecurityException when a dynamically registered receiver
+        // for non-system broadcasts omits the exported flag.
+        ContextCompat.registerReceiver(
+            context,
             receiver,
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         receiverRegistered = true
     }
