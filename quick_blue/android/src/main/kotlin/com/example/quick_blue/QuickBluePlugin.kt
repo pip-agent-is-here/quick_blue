@@ -36,6 +36,7 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.PluginRegistry
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,6 +51,8 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
@@ -91,11 +94,14 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
 
         quickBlueFlutterApi = QuickBlueFlutterApi(messenger)
         this.context = context
+        // Bluetooth broadcasts are sent by the privileged Bluetooth process, which
+        // runs under a different UID. RECEIVER_NOT_EXPORTED would drop them, so the
+        // receiver must be registered as exported.
         ContextCompat.registerReceiver(
             context,
             bondStateReceiver,
             IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_EXPORTED
         )
     }
 
@@ -1161,36 +1167,44 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
             ?: throw FlutterError("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val socket = gatt.device.createInsecureL2capChannel(psm.toInt())
         awaitGattCompletion { complete ->
-            val delegate = L2CapStreamDelegate(socket, openedCallback = {
-                complete(Result.success(Unit))
-            }, closedCallback = {
-                mainThreadHandler.post {
-                    l2CapSocketEventsListener.onSocketEvent(
-                        PlatformL2CapSocketEvent(
-                            deviceId = gatt.device.address,
-                            closed = true,
+            val delegate = L2CapStreamDelegate(
+                socket = socket.asL2CapSocket(),
+                // Settles the pending open exactly once: success once the socket is
+                // connected, failure when the connection attempt fails or the socket
+                // is closed before it ever connects. Without this the Dart
+                // `openL2cap` future stays pending forever on those paths.
+                onOpenSettled = { result -> complete(result) },
+                closedCallback = {
+                    mainThreadHandler.post {
+                        l2CapSocketEventsListener.onSocketEvent(
+                            PlatformL2CapSocketEvent(
+                                deviceId = gatt.device.address,
+                                closed = true,
+                            )
                         )
-                    )
-                }
-            }, streamCallback = {
-                mainThreadHandler.post {
-                    l2CapSocketEventsListener.onSocketEvent(
-                        PlatformL2CapSocketEvent(
-                            deviceId = gatt.device.address,
-                            data = it,
+                    }
+                },
+                streamCallback = {
+                    mainThreadHandler.post {
+                        l2CapSocketEventsListener.onSocketEvent(
+                            PlatformL2CapSocketEvent(
+                                deviceId = gatt.device.address,
+                                data = it,
+                            )
                         )
-                    )
-                }
-            }, errorCallback = {
-                mainThreadHandler.post {
-                    l2CapSocketEventsListener.onSocketEvent(
-                        PlatformL2CapSocketEvent(
-                            deviceId = gatt.device.address,
-                            error = it.message ?: "",
+                    }
+                },
+                errorCallback = {
+                    mainThreadHandler.post {
+                        l2CapSocketEventsListener.onSocketEvent(
+                            PlatformL2CapSocketEvent(
+                                deviceId = gatt.device.address,
+                                error = it.message ?: "",
+                            )
                         )
-                    )
-                }
-            })
+                    }
+                },
+            )
 
             streamDelegates[gatt.device.address] = delegate
         }
@@ -1318,24 +1332,49 @@ private fun Int.toPlatformBondState(): PlatformBondState {
     }
 }
 
-class L2CapStreamDelegate(
-    private val socket: BluetoothSocket,
-    val openedCallback: () -> Unit,
+/**
+ * The subset of [BluetoothSocket] the L2CAP delegate depends on. Extracted so a
+ * JVM unit test can drive the connection lifecycle without an Android device.
+ */
+internal interface L2CapSocket {
+    fun connect()
+    fun close()
+    val inputStream: InputStream
+    val outputStream: OutputStream
+}
+
+internal fun BluetoothSocket.asL2CapSocket(): L2CapSocket = object : L2CapSocket {
+    override fun connect() = this@asL2CapSocket.connect()
+    override fun close() = this@asL2CapSocket.close()
+    override val inputStream: InputStream get() = this@asL2CapSocket.inputStream
+    override val outputStream: OutputStream get() = this@asL2CapSocket.outputStream
+}
+
+internal class L2CapStreamDelegate(
+    private val socket: L2CapSocket,
+    /**
+     * Resolves the pending `openL2cap` call exactly once: with success once the
+     * socket is connected, or with failure when the connection attempt fails or the
+     * socket is closed before it connects.
+     */
+    private val onOpenSettled: (Result<Unit>) -> Unit,
     val closedCallback: () -> Unit,
     val streamCallback: (ByteArray) -> Unit,
-    val errorCallback: (Exception) -> Unit
+    val errorCallback: (Exception) -> Unit,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val callbackDispatcher: CoroutineDispatcher = Dispatchers.Main,
 ) {
 
     // A single scope to manage all coroutines for this connection.
     // SupervisorJob ensures that a failure in one child doesn't cancel the entire scope.
-    // Dispatchers.IO is the appropriate thread pool for network I/O.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private val writeDispatcher = newSingleThreadContext("L2CapWriteThread")
 
     // Terminal callbacks (error/closed) are delivered from this scope, which is
     // never cancelled, so they cannot be lost when `scope` is torn down.
-    private val callbackScope = CoroutineScope(Dispatchers.Main)
+    private val callbackScope = CoroutineScope(callbackDispatcher)
     private val closed = AtomicBoolean(false)
+    private val openSettled = AtomicBoolean(false)
 
     private var readJob: Job? = null
 
@@ -1346,14 +1385,27 @@ class L2CapStreamDelegate(
                 // 1. Connect the socket
                 socket.connect() // This is a blocking call, so it's run within Dispatchers.IO
 
-                // Switch to Main thread to safely call UI-related callbacks if needed
-                withContext(Dispatchers.Main) {
-                    openedCallback()
+                if (closed.get()) {
+                    // The socket was closed while the connection attempt was in
+                    // flight, so it is not usable: `finish` has already failed the
+                    // pending open, and a socket that is already gone is never
+                    // reported as opened.
+                    return@launch
+                }
+
+                // Switch to the callback thread to settle the pending open.
+                withContext(callbackDispatcher) {
+                    settleOpen(Result.success(Unit))
                 }
 
                 // 2. Start the read loop
                 startReadLoop()
 
+            } catch (e: CancellationException) {
+                // `close()` cancelled the scope while the attempt was in flight;
+                // `finish` settled the pending open when it claimed the terminal
+                // state, so there is nothing left to report here.
+                throw e
             } catch (e: Exception) {
                 // Catch connection errors or any other exception during setup
                 handleError(e)
@@ -1375,7 +1427,7 @@ class L2CapStreamDelegate(
                     // This copy is still required by the original callback signature.
                     // For better performance, change the callback to accept the buffer and size.
                     val data = buffer.copyOfRange(0, bytesRead)
-                    withContext(Dispatchers.Main) {
+                    withContext(callbackDispatcher) {
                         streamCallback(data)
                     }
                 }
@@ -1409,19 +1461,58 @@ class L2CapStreamDelegate(
         closeConnection()
     }
 
-    private fun handleError(e: Exception) {
-        // Deliver from callbackScope: launching inside `scope` and then cancelling
-        // it in closeConnection() would drop the error event.
+    private fun settleOpen(result: Result<Unit>) {
+        // Exactly once, whether or not the connection ever opened.
+        if (!openSettled.compareAndSet(false, true)) return
         callbackScope.launch {
-            errorCallback(e)
+            onOpenSettled(result)
         }
-        closeConnection()
+    }
+
+    private fun closedBeforeOpen(): FlutterError = FlutterError(
+        "L2CapClosed",
+        "The L2CAP socket was closed before the connection was established",
+        null,
+    )
+
+    private fun handleError(e: Exception) {
+        finish(e)
     }
 
     private fun closeConnection() {
+        finish(null)
+    }
+
+    /**
+     * Claims the terminal state before scheduling any callback: an explicit close
+     * racing a failure cannot emit an error after the closed event, and each
+     * terminal callback fires at most once. `failure` distinguishes a failed
+     * connection from an explicit closure.
+     */
+    private fun finish(failure: Exception?) {
         // Idempotent: the read loop's finally block, handleError() and an explicit
         // close() can all reach this, but each terminal callback fires at most once.
         if (!closed.compareAndSet(false, true)) return
+
+        // Settle the pending open from the path that claims the terminal state. A
+        // close can cancel the connect coroutine before it ever starts, so the
+        // connect path cannot be relied on to settle `openL2cap`; without this the
+        // Dart future would stay pending forever. `settleOpen` keeps it to exactly
+        // one result, and an explicit closure is reported as such rather than as
+        // a connection failure.
+        settleOpen(
+            if (failure == null) {
+                Result.failure(closedBeforeOpen())
+            } else {
+                Result.failure(
+                    FlutterError(
+                        "L2CapError",
+                        failure.message ?: "The L2CAP connection failed",
+                        null,
+                    )
+                )
+            }
+        )
 
         // Cancels all coroutines started in this scope (including the read loop).
         scope.cancel()
@@ -1433,8 +1524,11 @@ class L2CapStreamDelegate(
             // Can be ignored, as we are cleaning up anyway.
         }
 
-        // callbackScope is never cancelled, so this callback cannot be lost.
+        // callbackScope is never cancelled, so these callbacks cannot be lost.
         callbackScope.launch {
+            if (failure != null) {
+                errorCallback(failure)
+            }
             closedCallback()
         }
     }
@@ -1534,12 +1628,15 @@ class BluetoothStateListener(
     private fun registerReceiver() {
         if (receiverRegistered) return
         // API 34+ throws SecurityException when a dynamically registered receiver
-        // for non-system broadcasts omits the exported flag.
+        // for non-system broadcasts omits the exported flag. Bluetooth power
+        // transitions are sent by the privileged Bluetooth process, so the receiver
+        // must be exported to receive them; RECEIVER_NOT_EXPORTED would only ever
+        // deliver the initial state read in onListen().
         ContextCompat.registerReceiver(
             context,
             receiver,
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
+            ContextCompat.RECEIVER_EXPORTED,
         )
         receiverRegistered = true
     }

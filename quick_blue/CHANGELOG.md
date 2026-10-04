@@ -67,11 +67,17 @@
   companion filters, and missing companion permissions.
 - Fail Android pairing callbacks that never receive a terminal bond state after
   30 seconds, and on engine detach, instead of retaining them indefinitely.
-- Register the Android Bluetooth state receiver with `RECEIVER_NOT_EXPORTED`
-  so API 34+ targets no longer throw `SecurityException`.
+- Register the Android Bluetooth state receiver with `RECEIVER_EXPORTED`.
+  Bluetooth power and bond state broadcasts come from the privileged Bluetooth
+  process, which runs under a different UID, so `RECEIVER_NOT_EXPORTED` omitted
+  the export flag API 34+ requires while also dropping those transitions.
 - Deliver Android L2CAP error and closed callbacks from a scope that is not
   cancelled with the socket scope, so error events are no longer dropped, and
-  emit each terminal callback at most once.
+  emit each terminal callback at most once, with an explicit closure never
+  reported as a connection error.
+- Fail a pending Android `openL2cap` when the native L2CAP connection fails or
+  the socket is closed before it connects, instead of leaving the Dart future
+  pending forever.
 - Fix the macOS Catalyst build of `removeAppleAccessory`, which referenced a
   symbol compiled only for iOS without Catalyst.
 - Stop `setNotifiable` from trapping on a stale Darwin characteristic; it now
