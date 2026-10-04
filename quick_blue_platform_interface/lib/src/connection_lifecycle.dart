@@ -7,6 +7,28 @@ import 'cancellation_signal.dart';
 import 'observability.dart';
 import 'quick_blue_exception.dart';
 
+/// The two connection operations with every string and observation kind they
+/// need, so a typo is a compile error instead of a silently-unmatched
+/// comparison or a wrong-kind observation.
+enum _ConnectionOperationKind {
+  connect(name: 'connect', observationKind: QuickBlueOperationKind.connect),
+  disconnect(
+    name: 'disconnect',
+    observationKind: QuickBlueOperationKind.disconnect,
+  );
+
+  const _ConnectionOperationKind({
+    required this.name,
+    required this.observationKind,
+  });
+
+  /// The operation name used in error messages and `QuickBlueException.operation`.
+  final String name;
+
+  /// The observation kind reported to the instrumentation observer.
+  final QuickBlueOperationKind observationKind;
+}
+
 @internal
 class ConnectionLifecycleCoordinator {
   ConnectionLifecycleCoordinator({
@@ -23,7 +45,7 @@ class ConnectionLifecycleCoordinator {
 
   Future<void> connectDevice(String deviceId) async {
     final activeOperation = _activeOperations[deviceId];
-    if (activeOperation?.name == 'disconnect') {
+    if (activeOperation?.kind == _ConnectionOperationKind.disconnect) {
       activeOperation!.cancellation.cancel();
       try {
         await activeOperation.completed;
@@ -35,7 +57,7 @@ class ConnectionLifecycleCoordinator {
 
     return _runOperation(
       deviceId: deviceId,
-      operationName: 'connect',
+      operationKind: _ConnectionOperationKind.connect,
       targetState: BlueConnectionState.connected,
       failureMessage: 'Failed to connect to Bluetooth device $deviceId.',
       operation: (cancellation) =>
@@ -53,7 +75,10 @@ class ConnectionLifecycleCoordinator {
       try {
         await cancellation.untilCancelled(
           connect(deviceId),
-          error: _cancelledException(deviceId, 'connect'),
+          error: _cancelledException(
+            deviceId,
+            _ConnectionOperationKind.connect.name,
+          ),
         );
         return;
       } on QuickBlueException catch (error) {
@@ -73,7 +98,10 @@ class ConnectionLifecycleCoordinator {
         }
         await cancellation.untilCancelled(
           Future<void>.delayed(const Duration(milliseconds: 100)),
-          error: _cancelledException(deviceId, 'connect'),
+          error: _cancelledException(
+            deviceId,
+            _ConnectionOperationKind.connect.name,
+          ),
         );
       }
     }
@@ -81,7 +109,7 @@ class ConnectionLifecycleCoordinator {
 
   Future<void> disconnectDevice(String deviceId) async {
     final activeOperation = _activeOperations[deviceId];
-    if (activeOperation?.name == 'connect') {
+    if (activeOperation?.kind == _ConnectionOperationKind.connect) {
       activeOperation!.cancellation.cancel();
       try {
         await activeOperation.completed;
@@ -92,7 +120,7 @@ class ConnectionLifecycleCoordinator {
 
     return _runOperation(
       deviceId: deviceId,
-      operationName: 'disconnect',
+      operationKind: _ConnectionOperationKind.disconnect,
       targetState: BlueConnectionState.disconnected,
       failureMessage: 'Failed to disconnect Bluetooth device $deviceId.',
       operation: (_) => disconnect(deviceId),
@@ -101,7 +129,7 @@ class ConnectionLifecycleCoordinator {
 
   Future<void> _runOperation({
     required String deviceId,
-    required String operationName,
+    required _ConnectionOperationKind operationKind,
     required BlueConnectionState targetState,
     required String failureMessage,
     required Future<void> Function(
@@ -109,10 +137,9 @@ class ConnectionLifecycleCoordinator {
     )
     operation,
   }) {
+    final operationName = operationKind.name;
     final observation = QuickBlueInstrumentation.startOperation(
-      operationName == 'connect'
-          ? QuickBlueOperationKind.connect
-          : QuickBlueOperationKind.disconnect,
+      operationKind.observationKind,
       deviceId: deviceId,
     );
     final activeOperation = _activeOperations[deviceId];
@@ -123,16 +150,16 @@ class ConnectionLifecycleCoordinator {
             code: QuickBlueErrorCode.invalidState,
             operation: operationName,
             deviceId: deviceId,
-            details: activeOperation.name,
+            details: activeOperation.kind.name,
             message:
                 'Cannot $operationName Bluetooth device $deviceId while '
-                '${activeOperation.name} is pending.',
+                '${activeOperation.kind.name} is pending.',
           ),
         ),
         observation,
       );
     }
-    final connectionOperation = _ConnectionOperation(operationName);
+    final connectionOperation = _ConnectionOperation(operationKind);
     _activeOperations[deviceId] = connectionOperation;
     connectionOperation.completed = _executeOperation(
       deviceId: deviceId,
@@ -157,7 +184,7 @@ class ConnectionLifecycleCoordinator {
     )
     operation,
   }) async {
-    final operationName = connectionOperation.name;
+    final operationName = connectionOperation.kind.name;
     final cancellation = connectionOperation.cancellation;
 
     final stateCompleter = Completer<BluetoothConnectionStateChange>();
@@ -219,9 +246,9 @@ class ConnectionLifecycleCoordinator {
 }
 
 class _ConnectionOperation {
-  _ConnectionOperation(this.name);
+  _ConnectionOperation(this.kind);
 
-  final String name;
+  final _ConnectionOperationKind kind;
   final cancellation = _ConnectionOperationCancellation();
   late final Future<void> completed;
 }
