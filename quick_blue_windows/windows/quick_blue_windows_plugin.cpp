@@ -39,7 +39,7 @@ namespace {
 /// Extracts the `name` argument of a stream handler payload. Returns an empty
 /// string when the payload is missing or is not a map with a string `name`,
 /// instead of letting std::get throw std::bad_variant_access out of the handler.
-std::string StreamNameFromArguments(const EncodableValue* arguments) {
+std::string StreamNameFromArguments(const flutter::EncodableValue* arguments) {
   if (arguments == nullptr) {
     return std::string();
   }
