@@ -134,6 +134,11 @@ jobs:
             ':!:**/*.g.dart' \
             ':!:quick_blue_linux/lib/generated_bindings.dart')
 
+          # Resolve packages first: the formatter needs the package language
+          # versions from .dart_tool/package_config.json, and without them it
+          # reformats files differently than a developer checkout does.
+          flutter pub get
+
           dart format --output=none --set-exit-if-changed "${dart_files[@]}"
 
   generated-code:
