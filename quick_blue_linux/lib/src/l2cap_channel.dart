@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 
 import '../generated_bindings.dart';
+import 'l2cap_framing.dart';
 import 'native_libraries.dart';
 
 class L2capChannel {
@@ -29,14 +30,6 @@ class L2capChannel {
   /// Maximum connect() attempts before giving up, including the retries after a
   /// security-level downgrade or EINTR.
   static const int _connectAttemptLimit = 8;
-  // Linux errno values (x86_64; EAGAIN and EWOULDBLOCK share the same number).
-  static const int _eagain = 11;
-  static const int _eintr = 4;
-  static const int _eacces = 13;
-  static const int _econnreset = 104;
-  static const int _eshutdown = 108;
-  static const int _epipe = 32;
-  static const int _einval = 22;
 
   final String deviceId;
   final int psm;
@@ -156,7 +149,7 @@ class L2capChannel {
     try {
       addrPtr.ref
         ..l2_family = AF_BLUETOOTH
-        ..l2_psm = _hostToBluetoothShort(psm)
+        ..l2_psm = encodeL2capPsm(psm)
         ..l2_cid = 0
         ..l2_bdaddr_type = addressType & 0xFF;
 
@@ -201,16 +194,16 @@ class L2capChannel {
           break;
         }
         final err = libc.errno;
-        if (err == _eintr) {
+        if (err == L2capErrno.eintr) {
           continue;
         }
-        if ((err == _eacces || err == _einval) &&
+        if ((err == L2capErrno.eacces || err == L2capErrno.einval) &&
             currentSecurityLevel != BT_SECURITY_LOW) {
           currentSecurityLevel = BT_SECURITY_LOW;
           _setSecurityLevel(fd, currentSecurityLevel);
           continue;
         }
-        if (err == _einval && currentPsm == 0) {
+        if (err == L2capErrno.einval && currentPsm == 0) {
           // PSM 0 asks the kernel for a dynamic PSM, which connect() cannot resolve
           // here: retrying with the same address spins forever, so report instead.
           throw OSError('connect with dynamic PSM', err);
@@ -327,6 +320,7 @@ class L2capChannel {
       return;
     }
 
+    receiveLoop:
     while (!_closed) {
       final received = libc.recv(fd, bufferPtr, _receiveCapacity, MSG_DONTWAIT);
       if (received > 0) {
@@ -343,7 +337,7 @@ class L2capChannel {
         if (_mtuRefreshPending && received == _receiveCapacity) {
           _refreshMtu(fd);
         }
-        continue;
+        continue receiveLoop;
       }
       if (received == 0) {
         timer.cancel();
@@ -352,16 +346,16 @@ class L2capChannel {
       }
 
       final err = libc.errno;
-      if (err == _eagain) {
-        break;
+      switch (classifyRecvErrno(err)) {
+        case L2capRecvOutcome.again:
+          break receiveLoop;
+        case L2capRecvOutcome.retrySameChunk:
+          continue receiveLoop;
+        case L2capRecvOutcome.fatal:
+          timer.cancel();
+          _close(errorMessage: 'recv errno $err');
+          return;
       }
-      if (err == _eintr) {
-        continue;
-      }
-
-      timer.cancel();
-      _close(errorMessage: 'recv errno $err');
-      return;
     }
   }
 
@@ -415,11 +409,10 @@ class L2capChannel {
       while (offset < frame.data.length) {
         final chunkPtr = (ptr + offset).cast<ffi.Void>();
         final remaining = frame.data.length - offset;
-        final chunkLimit = _peerTransmitMtu;
-        final chunkLength =
-            (chunkLimit != null && chunkLimit > 0 && remaining > chunkLimit)
-            ? chunkLimit
-            : remaining;
+        final chunkLength = nextChunkLength(
+          remaining: remaining,
+          chunkLimit: _peerTransmitMtu,
+        );
         while (true) {
           final written = libc.send(_fd!, chunkPtr, chunkLength, 0);
           if (written > 0) {
@@ -431,24 +424,26 @@ class L2capChannel {
             return false;
           }
           final err = libc.errno;
-          if (err == _eagain) {
-            frame.offset = offset;
-            return false;
+          switch (classifySendErrno(err)) {
+            case L2capSendOutcome.retrySameChunk:
+              continue;
+            case L2capSendOutcome.retryLater:
+              frame.offset = offset;
+              return false;
+            case L2capSendOutcome.closed:
+              _close(errorMessage: 'send errno $err');
+              return true;
+            case L2capSendOutcome.firstChunkRetry:
+              if (offset == 0) {
+                _logger.fine(
+                  'send returned EINVAL on first chunk for $deviceId, retrying',
+                );
+                continue;
+              }
+              throw OSError('send', err);
+            case L2capSendOutcome.fatal:
+              throw OSError('send', err);
           }
-          if (err == _eintr) {
-            continue;
-          }
-          if (err == _epipe || err == _econnreset || err == _eshutdown) {
-            _close(errorMessage: 'send errno $err');
-            return true;
-          }
-          if (err == _einval && offset == 0) {
-            _logger.fine(
-              'send returned EINVAL on first chunk for $deviceId, retrying',
-            );
-            continue;
-          }
-          throw OSError('send', err);
         }
       }
 
@@ -538,15 +533,6 @@ class L2capChannel {
     _receiveCapacity = capacity;
   }
 
-  int _hostToBluetoothShort(int value) {
-    if (value < 0 || value > 0xFFFF) {
-      throw RangeError.range(value, 0, 0xFFFF, 'psm');
-    }
-    if (Endian.host == Endian.little) {
-      return value & 0xFFFF;
-    }
-    return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
-  }
 }
 
 class _PendingFrame {
