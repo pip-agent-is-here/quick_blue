@@ -764,6 +764,18 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         }
     }
 
+    /// Sends a FlutterApi event without blocking the caller. The generated
+    /// FlutterApi methods are @MainActor async throws and await the Dart-side
+    /// reply, so they cannot be called synchronously; replies are best-effort.
+    private func sendToFlutter(
+        _ send: @escaping (QuickBlueFlutterApi) async -> Void
+    ) {
+        let api = flutterApi
+        Task { @MainActor in
+            await send(api)
+        }
+    }
+
     private func emitConnectionState(
         deviceId: String,
         state: PlatformConnectionState,
@@ -772,17 +784,18 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
     ) {
         guard attachedToEngine else { return }
         let nativeError = error as NSError?
-        flutterApi.onConnectionStateChange(
-            stateChange: PlatformConnectionStateChange(
-                deviceId: deviceId,
-                state: state,
-                gattStatus: status,
-                errorDomain: nativeError?.domain,
-                errorCode: nativeError.map { Int64($0.code) },
-                errorMessage: nativeError?.localizedDescription
-            ),
-            completion: { _ in }
-        )
+        sendToFlutter { api in
+            try? await api.onConnectionStateChange(
+                stateChange: PlatformConnectionStateChange(
+                    deviceId: deviceId,
+                    state: state,
+                    gattStatus: status,
+                    errorDomain: nativeError?.domain,
+                    errorCode: nativeError.map { Int64($0.code) },
+                    errorMessage: nativeError?.localizedDescription
+                )
+            )
+        }
     }
 
     private static func emitConnectionState(
@@ -803,10 +816,9 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
 
     private func emitServiceDiscovered(_ service: PlatformServiceDiscovered) {
         guard attachedToEngine else { return }
-        flutterApi.onServiceDiscovered(
-            serviceDiscovered: service,
-            completion: { _ in }
-        )
+        sendToFlutter { api in
+            try? await api.onServiceDiscovered(serviceDiscovered: service)
+        }
     }
 
     private static func emitServiceDiscovered(
@@ -820,10 +832,9 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
 
     private func emitServiceDiscoveryComplete(deviceId: String) {
         guard attachedToEngine else { return }
-        flutterApi.onServiceDiscoveryComplete(
-            deviceId: deviceId,
-            completion: { _ in }
-        )
+        sendToFlutter { api in
+            try? await api.onServiceDiscoveryComplete(deviceId: deviceId)
+        }
     }
 
     private static func emitServiceDiscoveryComplete(deviceId: String) {
@@ -837,13 +848,14 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         invalidatedServiceUuids: [String]
     ) {
         guard attachedToEngine else { return }
-        flutterApi.onGattServicesChanged(
-            serviceChange: PlatformGattServiceChange(
-                deviceId: deviceId,
-                invalidatedServiceUuids: invalidatedServiceUuids
-            ),
-            completion: { _ in }
-        )
+        sendToFlutter { api in
+            try? await api.onGattServicesChanged(
+                serviceChange: PlatformGattServiceChange(
+                    deviceId: deviceId,
+                    invalidatedServiceUuids: invalidatedServiceUuids
+                )
+            )
+        }
     }
 
     private static func emitGattServicesChanged(
@@ -862,10 +874,9 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         _ value: PlatformCharacteristicValueChanged
     ) {
         guard attachedToEngine else { return }
-        flutterApi.onCharacteristicValueChanged(
-            valueChanged: value,
-            completion: { _ in }
-        )
+        sendToFlutter { api in
+            try? await api.onCharacteristicValueChanged(valueChanged: value)
+        }
     }
 
     init(
@@ -1020,6 +1031,17 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
     }
 
     func showAppleAccessoryPicker(
+        items: [PlatformAppleAccessoryPickerItem]
+    ) async throws -> PlatformAppleAccessory? {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<PlatformAppleAccessory?, Error>) in
+            showAppleAccessoryPicker(items: items) { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
+    func showAppleAccessoryPicker(
         items: [PlatformAppleAccessoryPickerItem],
         completion: @escaping (Result<PlatformAppleAccessory?, Error>) -> Void
     ) {
@@ -1047,6 +1069,15 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         completion(.failure(appleAccessorySetupUnsupportedError()))
     }
 
+    func getAppleAccessories() async throws -> [PlatformAppleAccessory] {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<[PlatformAppleAccessory], Error>) in
+            getAppleAccessories { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
     func getAppleAccessories(
         completion: @escaping (Result<[PlatformAppleAccessory], Error>) -> Void
     ) {
@@ -1059,6 +1090,15 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
             }
         #endif
         completion(.failure(appleAccessorySetupUnsupportedError()))
+    }
+
+    func removeAppleAccessory(deviceId: String) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            removeAppleAccessory(deviceId: deviceId) { result in
+                continuation.resume(with: result)
+            }
+        }
     }
 
     func removeAppleAccessory(
@@ -1362,6 +1402,25 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
         deviceId: String,
         service: String,
         characteristic: String,
+        bleInputProperty: PlatformBleInputProperty
+    ) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            setNotifiable(
+                deviceId: deviceId,
+                service: service,
+                characteristic: characteristic,
+                bleInputProperty: bleInputProperty
+            ) { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
+    func setNotifiable(
+        deviceId: String,
+        service: String,
+        characteristic: String,
         bleInputProperty: PlatformBleInputProperty,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
@@ -1425,6 +1484,23 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
     func readValue(
         deviceId: String,
         service: String,
+        characteristic: String
+    ) async throws -> FlutterStandardTypedData {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<FlutterStandardTypedData, Error>) in
+            readValue(
+                deviceId: deviceId,
+                service: service,
+                characteristic: characteristic
+            ) { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
+    func readValue(
+        deviceId: String,
+        service: String,
         characteristic: String,
         completion: @escaping (
             Result<FlutterStandardTypedData, Error>
@@ -1452,6 +1528,27 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
             }
         } catch {
             completion(.failure(error))
+        }
+    }
+
+    func writeValue(
+        deviceId: String,
+        service: String,
+        characteristic: String,
+        value: FlutterStandardTypedData,
+        bleOutputProperty: PlatformBleOutputProperty
+    ) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            writeValue(
+                deviceId: deviceId,
+                service: service,
+                characteristic: characteristic,
+                value: value,
+                bleOutputProperty: bleOutputProperty
+            ) { result in
+                continuation.resume(with: result)
+            }
         }
     }
 
