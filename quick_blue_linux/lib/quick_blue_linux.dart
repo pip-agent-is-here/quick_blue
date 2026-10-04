@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:bluez/bluez.dart';
@@ -11,6 +10,7 @@ import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart
 
 import 'generated_bindings.dart';
 import 'src/l2cap_channel.dart';
+import 'src/connection_lease.dart';
 import 'src/connection_ownership.dart';
 import 'src/native_libraries.dart';
 import 'src/scan_filter.dart';
@@ -21,8 +21,18 @@ typedef _BlueZPropertySubscription = StreamSubscription<List<String>>;
 typedef _DevicePropertySubscriptions = Map<String, _BlueZPropertySubscription>;
 typedef _NotificationSubscriptions = Map<String, _DevicePropertySubscriptions>;
 
-class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
-  final DBusClient _client = DBusClient.system(introspectable: false);
+/// Connection lease over the system D-Bus: a per-device well-known name per
+/// engine plus a device-scoped lock, so multiple Flutter engines (or processes)
+/// share one BlueZ connection with a defined last-client handoff.
+@visibleForTesting
+class DbusConnectionLease implements QuickBlueLinuxConnectionLease {
+  DbusConnectionLease() : _bus = SystemConnectionLeaseBus();
+
+  /// Test seam; referenced from the package's unit tests only.
+  @visibleForTesting
+  DbusConnectionLease.withBus(this._bus);
+
+  final ConnectionLeaseBus _bus;
 
   /// How long to wait for the per-device connection lock before giving up.
   static const Duration _lockTimeout = Duration(seconds: 10);
@@ -31,7 +41,7 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
   @override
   Future<void> attach(String deviceId) async {
     await _withDeviceLock(deviceId, () async {
-      final reply = await _client.requestName(_clientNameFor(deviceId));
+      final reply = await _bus.requestName(_clientNameFor(deviceId));
       if (reply != DBusRequestNameReply.primaryOwner &&
           reply != DBusRequestNameReply.alreadyOwner) {
         throw StateError(
@@ -47,12 +57,14 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
     Future<void> Function() onLastClient,
   ) async {
     await _withDeviceLock(deviceId, () async {
-      await _client.releaseName(_clientNameFor(deviceId));
-      final prefix = '${_clientNamePrefix(deviceId)}.Client';
-      final hasOtherClients = (await _client.listNames()).any(
-        (name) => name.startsWith(prefix),
-      );
-      if (!hasOtherClients) {
+      final ownedName = _clientNameFor(deviceId);
+      await _bus.releaseName(ownedName);
+      if (!hasOtherConnectionClients(
+        deviceId: deviceId,
+        pid: pid,
+        ownedName: ownedName,
+        busNames: await _bus.listNames(),
+      )) {
         await onLastClient();
       }
     });
@@ -65,7 +77,7 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
     final lockName = '${_clientNamePrefix(deviceId)}.Lock';
     final deadline = DateTime.now().add(_lockTimeout);
     while (true) {
-      final reply = await _client.requestName(
+      final reply = await _bus.requestName(
         lockName,
         flags: const {DBusRequestNameFlag.doNotQueue},
       );
@@ -85,29 +97,20 @@ class _DbusConnectionLease implements QuickBlueLinuxConnectionLease {
     try {
       await action();
     } finally {
-      await _client.releaseName(lockName);
+      await _bus.releaseName(lockName);
     }
   }
 
   String _clientNameFor(String deviceId) {
-    return '${_clientNamePrefix(deviceId)}.Client${_dbusClientId()}';
-  }
-
-  String _dbusClientId() {
-    final name = _client.uniqueName;
-    if (name.isEmpty) {
-      throw StateError('The D-Bus connection has no unique name');
-    }
-    return name.replaceAll(':', '').replaceAll('.', '_');
+    return connectionLeaseClientName(
+      deviceId,
+      pid: pid,
+      uniqueName: _bus.uniqueName,
+    );
   }
 
   static String _clientNamePrefix(String deviceId) {
-    var hash = 0xcbf29ce484222325;
-    for (final byte in utf8.encode(deviceId)) {
-      hash ^= byte;
-      hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
-    }
-    return 'dev.quick_blue.Connection.p$pid.d${hash.toRadixString(16).padLeft(16, '0')}';
+    return connectionLeaseNamePrefix(deviceId, pid: pid);
   }
 }
 
@@ -119,7 +122,7 @@ class QuickBlueLinux extends QuickBluePlatform {
     this._client, {
     QuickBlueLinuxConnectionLease? connectionLease,
   }) : _connectionOwnership = ConnectionOwnership(
-         connectionLease ?? _DbusConnectionLease(),
+         connectionLease ?? DbusConnectionLease(),
        ) {
     _scanResultController = StreamController<BlueScanResult>.broadcast(
       onListen: _emitKnownScanResults,

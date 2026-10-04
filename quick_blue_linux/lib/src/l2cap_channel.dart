@@ -532,7 +532,6 @@ class L2capChannel {
     _readBuffer = calloc<ffi.Uint8>(capacity);
     _receiveCapacity = capacity;
   }
-
 }
 
 class _PendingFrame {
