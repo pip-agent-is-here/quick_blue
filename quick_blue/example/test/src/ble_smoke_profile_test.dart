@@ -16,6 +16,23 @@ void main() {
       expect(profile?.targetsDevice, isTrue);
     });
 
+    test('loads built-in LEDnet hardware connect/discover profile', () {
+      final profile = BleSmokeProfile.builtIn(lednetSmokeProfileName);
+
+      expect(profile, isNotNull);
+      expect(profile?.targetNamePattern, r'^LEDnetWF0200A36292D3$');
+      expect(profile?.expectedServiceUuids, <String>[
+        '1800',
+        '1801',
+        'fe00',
+        'ffff',
+      ]);
+      expect(profile?.connect, isTrue);
+      expect(profile?.read, isFalse);
+      expect(profile?.maxConnectAttempts, 1);
+      expect(profile?.targetsDevice, isTrue);
+    });
+
     test('parses custom JSON profile', () {
       final profile = BleSmokeProfile.fromJson('''
         {

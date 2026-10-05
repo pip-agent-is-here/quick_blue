@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const valveLighthouseSmokeProfileName = 'valve_lighthouse';
+const lednetSmokeProfileName = 'lednet_local';
 
 const _builtInProfiles = <String, BleSmokeProfile>{
   valveLighthouseSmokeProfileName: BleSmokeProfile(
@@ -9,6 +10,14 @@ const _builtInProfiles = <String, BleSmokeProfile>{
     targetNamePattern: r'^(LHB-|Valve|Base Station|Lighthouse)',
     expectedManufacturerDataHex: '00 02',
     connect: false,
+    read: false,
+    maxConnectAttempts: 1,
+  ),
+  lednetSmokeProfileName: BleSmokeProfile(
+    name: lednetSmokeProfileName,
+    targetNamePattern: r'^LEDnetWF0200A36292D3$',
+    expectedServiceUuids: <String>['1800', '1801', 'fe00', 'ffff'],
+    connect: true,
     read: false,
     maxConnectAttempts: 1,
   ),
