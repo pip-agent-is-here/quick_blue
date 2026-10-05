@@ -6,19 +6,19 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 
-import 'generated_bindings.dart';
-import 'src/l2cap_channel.dart';
+import 'src/l2cap_endpoint.dart';
 import 'src/connection_ownership.dart';
 import 'src/dbus_connection_lease.dart';
-import 'src/native_libraries.dart';
-import 'src/scan_filter.dart';
+import 'src/scan_session.dart';
+import 'src/gatt_session.dart';
+import 'src/device_property.dart';
+import 'src/uuid_rules.dart';
 
 export 'src/connection_ownership.dart' show QuickBlueLinuxConnectionLease;
 export 'src/dbus_connection_lease.dart' show DbusConnectionLease;
 
 typedef _BlueZPropertySubscription = StreamSubscription<List<String>>;
 typedef _DevicePropertySubscriptions = Map<String, _BlueZPropertySubscription>;
-typedef _NotificationSubscriptions = Map<String, _DevicePropertySubscriptions>;
 
 class QuickBlueLinux extends QuickBluePlatform {
   QuickBlueLinux() : this.withClient(BlueZClient());
@@ -30,19 +30,27 @@ class QuickBlueLinux extends QuickBluePlatform {
   }) : _connectionOwnership = ConnectionOwnership(
          connectionLease ?? DbusConnectionLease(),
        ) {
-    _scanResultController = StreamController<BlueScanResult>.broadcast(
-      onListen: _emitKnownScanResults,
+    _scanSession = LinuxScanSession(
+      client: _client,
+      onTrackDevice: (device) => _devices[device.address] = device,
+      logger: _logger,
+    );
+    _gattSession = LinuxGattSession(
+      getDevice: _getDeviceOrThrow,
+      ensureConnected: _ensureConnectedDevice,
+      handleServiceDiscovered: handleServiceDiscovered,
+      onServiceDiscoveryComplete: (deviceId) =>
+          onServiceDiscoveryComplete(deviceId),
+      handleCharacteristicValueChanged: handleCharacteristicValueChanged,
+      handleGattServicesChanged: handleGattServicesChanged,
+      logger: _logger,
+    );
+    _l2capEndpoint = LinuxL2capEndpoint(
+      client: _client,
+      devices: _devices,
+      logger: _logger,
     );
   }
-
-  static const _scanResultProperties = <String>{
-    'Alias',
-    'ManufacturerData',
-    'Name',
-    'RSSI',
-    'ServiceData',
-    'UUIDs',
-  };
 
   static void registerWith() {
     QuickBluePlatform.instance = QuickBlueLinux();
@@ -76,41 +84,23 @@ class QuickBlueLinux extends QuickBluePlatform {
   final BlueZClient _client;
   final ConnectionOwnership _connectionOwnership;
   final Logger _logger = Logger('QuickBlueLinux');
-  late final Libc _libc = Libc();
-  LibBluetooth? _libBluetooth;
 
   // Cached BlueZ objects and active subscriptions.
   final Map<String, BlueZDevice> _devices = <String, BlueZDevice>{};
   final _DevicePropertySubscriptions _devicePropertySubscriptions =
       <String, _BlueZPropertySubscription>{};
-  final _NotificationSubscriptions _notificationSubscriptions =
-      <String, _DevicePropertySubscriptions>{};
-  final _DevicePropertySubscriptions _scanDevicePropertySubscriptions =
-      <String, _BlueZPropertySubscription>{};
-  final Map<String, Future<void>> _serviceDiscoveryEmits =
-      <String, Future<void>>{};
   final Map<String, bool> _lastConnectionState = <String, bool>{};
-  final Map<String, bool> _servicesResolvedStates = <String, bool>{};
-  final Map<String, String> _gattFingerprints = <String, String>{};
-  final Map<String, _ResolvedCharacteristic> _resolvedCharacteristics =
-      <String, _ResolvedCharacteristic>{};
 
   StreamSubscription<BlueZDevice>? _deviceAddedSubscription;
   StreamSubscription<BlueZDevice>? _deviceRemovedSubscription;
 
-  // Active scan state.
   BlueZAdapter? _activeAdapter;
-  Set<String> _activeScanServiceUuids = const <String>{};
-  Map<String, Uint8List>? _activeScanServiceData;
-  Map<int, Uint8List>? _activeScanManufacturerData;
-  int? _activeScanRssi;
-  LinuxScanOptions _activeScanOptions = const LinuxScanOptions();
-  var _isScanning = false;
-
-  late final StreamController<BlueScanResult> _scanResultController;
+  late final LinuxScanSession _scanSession;
+  late final LinuxGattSession _gattSession;
+  late final LinuxL2capEndpoint _l2capEndpoint;
 
   @override
-  Stream<BlueScanResult> get scanResultStream => _scanResultController.stream;
+  Stream<BlueScanResult> get scanResultStream => _scanSession.results;
 
   Future<void> _ensureInitialized() {
     final existing = _initialization;
@@ -249,94 +239,17 @@ class QuickBlueLinux extends QuickBluePlatform {
       );
     }
 
-    _activeScanServiceUuids = scanFilter.serviceUuids
-        .map(_canonicalizeUuid)
-        .toSet();
-    _activeScanServiceData = scanFilter.serviceData;
-    _activeScanManufacturerData = scanFilter.manufacturerData;
-    _activeScanRssi = scanFilter.rssi ?? scanOptions.linux.rssi;
-    _activeScanOptions = scanOptions.linux;
-    await _setDiscoveryFilter(adapter, scanFilter, scanOptions);
-    await adapter.startDiscovery();
-    _isScanning = true;
+    await _scanSession.start(adapter, scanFilter, scanOptions);
   }
 
   @override
   Future<void> stopScan() async {
     await _ensureInitialized();
-    _isScanning = false;
-
-    final adapter = _activeAdapter;
-    if (adapter == null) {
-      await _clearScanDevicePropertySubscriptions();
-      _activeScanServiceUuids = const <String>{};
-      _activeScanServiceData = null;
-      _activeScanManufacturerData = null;
-      _activeScanRssi = null;
-      _activeScanOptions = const LinuxScanOptions();
-      return;
-    }
-    try {
-      await adapter.stopDiscovery();
-    } finally {
-      await _clearScanDevicePropertySubscriptions();
-      _activeScanServiceUuids = const <String>{};
-      _activeScanServiceData = null;
-      _activeScanManufacturerData = null;
-      _activeScanRssi = null;
-      _activeScanOptions = const LinuxScanOptions();
-    }
-  }
-
-  void _emitKnownScanResults() {
-    if (!_isScanning) {
-      return;
-    }
-
-    for (final device in _client.devices) {
-      _trackDevice(device);
-      _emitScanResult(device);
-    }
+    await _scanSession.stop(_activeAdapter);
   }
 
   void _onDeviceAdd(BlueZDevice device) {
-    _trackDevice(device);
-    _emitScanResult(device);
-  }
-
-  void _trackDevice(BlueZDevice device) {
-    _devices[device.address] = device;
-    if (_isScanning) {
-      _watchScanDeviceProperties(device);
-    }
-  }
-
-  void _emitScanResult(BlueZDevice device) {
-    if (!_isScanning) {
-      return;
-    }
-    if (!_matchesScanFilter(device)) {
-      return;
-    }
-
-    final manufacturerData = device.advertisedManufacturerData;
-    final result = BlueScanResult(
-      deviceId: device.address,
-      name: device.alias.isEmpty ? device.name : device.alias,
-      manufacturerDataHead: manufacturerData.head,
-      manufacturerData: manufacturerData.payload,
-      rssi: device.rssi,
-      serviceUuids: device.uuids
-          .map((uuid) => _formatUuid(uuid))
-          .toList(growable: false),
-      serviceData: device.serviceData.map(
-        (uuid, value) => MapEntry(_formatUuid(uuid), Uint8List.fromList(value)),
-      ),
-    );
-    if (!matchesServiceDataFilter(_activeScanServiceData, result.serviceData)) {
-      return;
-    }
-    _scanResultController.add(result);
+    _scanSession.deviceAdded(device);
   }
 
   void _onDeviceRemoved(BlueZDevice device) {
@@ -344,29 +257,6 @@ class QuickBlueLinux extends QuickBluePlatform {
       _clearDeviceState(device.address, removeDevice: true),
       'Unable to clear removed device ${device.address}',
     );
-  }
-
-  void _watchScanDeviceProperties(BlueZDevice device) {
-    final deviceId = device.address;
-    if (_scanDevicePropertySubscriptions.containsKey(deviceId)) {
-      return;
-    }
-
-    _scanDevicePropertySubscriptions[deviceId] = device.propertiesChanged
-        .listen(
-          (properties) {
-            if (properties.any(_scanResultProperties.contains)) {
-              _emitScanResult(device);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            _logger.warning(
-              'Scan property stream error for $deviceId',
-              error,
-              stackTrace,
-            );
-          },
-        );
   }
 
   @override
@@ -378,14 +268,14 @@ class QuickBlueLinux extends QuickBluePlatform {
       _devices[device.address] = device;
     }
 
-    final canonicalServiceUuids = serviceUuids.map(_canonicalizeUuid).toSet();
+    final canonicalServiceUuids = serviceUuids.map(canonicalizeUuid).toSet();
     return _devices.values
         .where((device) => device.connected)
         .where(
           (device) =>
               canonicalServiceUuids.isEmpty ||
               device.uuids
-                  .map(_bluezUuidToCanonical)
+                  .map(bluezUuidToCanonical)
                   .toSet()
                   .containsAll(canonicalServiceUuids),
         )
@@ -441,7 +331,7 @@ class QuickBlueLinux extends QuickBluePlatform {
     final device = _getDeviceOrThrow(deviceId);
 
     try {
-      await _stopNotificationsForClient(deviceId);
+      await _gattSession.stopNotificationsForClient(deviceId);
       await _connectionOwnership.detach(
         deviceId,
         onLastClient: () async {
@@ -489,7 +379,7 @@ class QuickBlueLinux extends QuickBluePlatform {
     final device = _getDeviceOrThrow(deviceId);
 
     await _ensureConnectedDevice(device);
-    await _emitServiceDiscovery(device);
+    await _gattSession.discoverServices(device);
   }
 
   @override
@@ -500,99 +390,11 @@ class QuickBlueLinux extends QuickBluePlatform {
     BleInputProperty bleInputProperty,
   ) async {
     await _ensureInitialized();
-    final resolved = await _resolveCharacteristic(
+    await _gattSession.setNotifiable(
       deviceId,
       service,
       characteristic,
-    );
-    final device = resolved.device;
-    final targetCharacteristic = resolved.characteristic;
-
-    final key = _characteristicKey(service, characteristic);
-
-    if (bleInputProperty == BleInputProperty.disabled) {
-      if (targetCharacteristic.notifying) {
-        await _runBlueZGattOperation(
-          operation: 'setNotifiable',
-          deviceId: deviceId,
-          serviceId: service,
-          characteristicId: characteristic,
-          action: targetCharacteristic.stopNotify,
-        );
-      }
-      await _removeNotificationSubscription(deviceId, key);
-      return;
-    }
-
-    final requiredFlag = bleInputProperty == BleInputProperty.indication
-        ? BlueZGattCharacteristicFlag.indicate
-        : BlueZGattCharacteristicFlag.notify;
-    if (!targetCharacteristic.flags.contains(requiredFlag)) {
-      throw QuickBlueException(
-        code: QuickBlueErrorCode.unsupported,
-        operation: 'setNotifiable',
-        deviceId: deviceId,
-        serviceId: service,
-        characteristicId: characteristic,
-        message:
-            'Characteristic $characteristic on $service does not support '
-            '${bleInputProperty.value}.',
-      );
-    }
-
-    try {
-      // BlueZ reference-counts StartNotify by D-Bus client. Call it even when
-      // another engine already made the global Notifying property true.
-      await _runBlueZGattOperation(
-        operation: 'setNotifiable',
-        deviceId: deviceId,
-        serviceId: service,
-        characteristicId: characteristic,
-        action: targetCharacteristic.startNotify,
-      );
-    } on BlueZAlreadyExistsException {
-      // This D-Bus client already enabled notifications.
-    }
-
-    await _removeNotificationSubscription(deviceId, key);
-
-    final subscription = targetCharacteristic.propertiesChanged.listen(
-      (changed) {
-        if (changed.contains('Value')) {
-          _emitCharacteristicValue(
-            device.address,
-            resolved.serviceId,
-            resolved.characteristicId,
-            targetCharacteristic,
-          );
-        }
-        if (changed.contains('Notifying') && !targetCharacteristic.notifying) {
-          _observeBackgroundOperation(
-            _removeNotificationSubscription(device.address, key),
-            'Unable to remove notification subscription for $deviceId',
-          );
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        _logger.warning(
-          'Notification stream error for $deviceId ($service/$characteristic)',
-          error,
-          stackTrace,
-        );
-      },
-    );
-
-    final deviceSubscriptions = _notificationSubscriptions.putIfAbsent(
-      deviceId,
-      () => <String, _BlueZPropertySubscription>{},
-    );
-    deviceSubscriptions[key] = subscription;
-
-    _emitCharacteristicValue(
-      device.address,
-      resolved.serviceId,
-      resolved.characteristicId,
-      targetCharacteristic,
+      bleInputProperty,
     );
   }
 
@@ -612,29 +414,11 @@ class QuickBlueLinux extends QuickBluePlatform {
     String characteristic,
   ) async {
     await _ensureInitialized();
-    final resolved = await _resolveCharacteristic(
+    return _gattSession.readCharacteristicValue(
       deviceId,
       service,
       characteristic,
     );
-    final device = resolved.device;
-    final targetCharacteristic = resolved.characteristic;
-
-    final data = await _runBlueZGattOperation(
-      operation: 'readValue',
-      deviceId: deviceId,
-      serviceId: service,
-      characteristicId: characteristic,
-      action: targetCharacteristic.readValue,
-    );
-    final value = _emitCharacteristicValue(
-      device.address,
-      resolved.serviceId,
-      resolved.characteristicId,
-      targetCharacteristic,
-      overrideValue: data,
-    );
-    return value;
   }
 
   @override
@@ -646,23 +430,12 @@ class QuickBlueLinux extends QuickBluePlatform {
     BleOutputProperty bleOutputProperty,
   ) async {
     await _ensureInitialized();
-    final resolved = await _resolveCharacteristic(
+    await _gattSession.writeValue(
       deviceId,
       service,
       characteristic,
-    );
-    final targetCharacteristic = resolved.characteristic;
-
-    final writeType = bleOutputProperty == BleOutputProperty.withResponse
-        ? BlueZGattCharacteristicWriteType.request
-        : BlueZGattCharacteristicWriteType.command;
-
-    await _runBlueZGattOperation(
-      operation: 'writeValue',
-      deviceId: deviceId,
-      serviceId: service,
-      characteristicId: characteristic,
-      action: () => targetCharacteristic.writeValue(value, type: writeType),
+      value,
+      bleOutputProperty,
     );
   }
 
@@ -682,43 +455,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   @override
   Future<BleL2capSocket> openL2cap(String deviceId, int psm) async {
     await _ensureInitialized();
-
-    final device =
-        _devices[deviceId] ??
-        _client.devices.firstWhereOrNull((d) => d.address == deviceId);
-
-    if (device == null) {
-      throw QuickBlueException(
-        code: QuickBlueErrorCode.notFound,
-        operation: 'openL2cap',
-        deviceId: deviceId,
-        message: 'Bluetooth device $deviceId is not known.',
-      );
-    }
-
-    _devices[deviceId] = device;
-
-    final bluetooth = _libBluetooth ??= LibBluetooth();
-
-    final channel = L2capChannel(
-      deviceId: deviceId,
-      psm: psm,
-      addressType: _resolveAddressType(device),
-      libc: _libc,
-      bluetooth: bluetooth,
-      logger: _logger,
-    );
-
-    try {
-      return await channel.open();
-    } on Object catch (error, stackTrace) {
-      _logger.severe(
-        'Unable to open L2CAP channel to $deviceId',
-        error,
-        stackTrace,
-      );
-      rethrow;
-    }
+    return _l2capEndpoint.open(deviceId, psm);
   }
 
   @override
@@ -757,98 +494,6 @@ class QuickBlueLinux extends QuickBluePlatform {
     return _client.adapters.firstWhereOrNull((adapter) => adapter.powered);
   }
 
-  Future<void> _setDiscoveryFilter(
-    BlueZAdapter adapter,
-    ScanFilter scanFilter,
-    ScanOptions scanOptions,
-  ) {
-    final serviceUuids = scanFilter.serviceUuids
-        .map(_canonicalizeUuid)
-        .map(_canonicalToDashed)
-        .toList(growable: false);
-
-    final linuxOptions = scanOptions.linux;
-    return adapter.setDiscoveryFilter(
-      uuids: serviceUuids.isEmpty ? null : serviceUuids,
-      rssi: scanFilter.rssi ?? linuxOptions.rssi,
-      pathloss: linuxOptions.pathloss,
-      transport: linuxOptions.transport.bluezValue,
-      duplicateData:
-          linuxOptions.duplicateData ?? scanOptions.allowDuplicates ?? false,
-      discoverable: linuxOptions.discoverable,
-      pattern: linuxOptions.pattern,
-    );
-  }
-
-  bool _matchesScanFilter(BlueZDevice device) {
-    if (_activeScanServiceUuids.isNotEmpty) {
-      final matchesService = device.uuids
-          .map(_bluezUuidToCanonical)
-          .any(_activeScanServiceUuids.contains);
-      if (!matchesService) {
-        return false;
-      }
-    }
-
-    final manufacturerData = _activeScanManufacturerData;
-    if (manufacturerData != null && manufacturerData.isNotEmpty) {
-      for (final entry in manufacturerData.entries) {
-        final advertisedData = device.manufacturerData.entries
-            .firstWhereOrNull(
-              (advertisedEntry) => advertisedEntry.key.id == entry.key,
-            )
-            ?.value;
-        if (advertisedData == null ||
-            !_startsWith(advertisedData, entry.value)) {
-          return false;
-        }
-      }
-    }
-
-    final scanOptions = _activeScanOptions;
-    final rssi = _activeScanRssi;
-    if (!meetsRssiThreshold(device.rssi, rssi)) {
-      return false;
-    }
-
-    final pathloss = scanOptions.pathloss;
-    if (pathloss != null && device.txPower != 0) {
-      final computedPathloss = device.txPower - device.rssi;
-      if (computedPathloss >= pathloss) {
-        return false;
-      }
-    }
-
-    final pattern = scanOptions.pattern;
-    if (pattern != null &&
-        !device.address.startsWith(pattern) &&
-        !device.name.startsWith(pattern)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  bool _startsWith(List<int> data, Uint8List prefix) {
-    if (prefix.length > data.length) {
-      return false;
-    }
-    for (var index = 0; index < prefix.length; index++) {
-      if (data[index] != prefix[index]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  int _resolveAddressType(BlueZDevice device) {
-    final addressType = device.addressType;
-    if (addressType == BlueZAddressType.random) {
-      return BDADDR_LE_RANDOM;
-    }
-    return BDADDR_LE_PUBLIC;
-  }
-
   BlueZDevice _getDeviceOrThrow(String deviceId) {
     final device =
         _devices[deviceId] ??
@@ -885,7 +530,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> _watchDeviceProperties(BlueZDevice device) async {
     final deviceId = device.address;
     await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
-    _servicesResolvedStates[deviceId] = device.servicesResolved;
+    _gattSession.watchDevice(device);
 
     final subscription = device.propertiesChanged.listen(
       (properties) {
@@ -900,26 +545,14 @@ class QuickBlueLinux extends QuickBluePlatform {
               'Unable to detach the connection client for $deviceId',
             );
             _observeBackgroundOperation(
-              _clearNotificationSubscriptions(deviceId),
+              _gattSession.clearNotificationSubscriptions(deviceId),
               'Unable to clear notification subscriptions for $deviceId',
             );
-            _clearResolvedCharacteristics(deviceId);
+            _gattSession.clearResolvedCharacteristics(deviceId);
           }
         }
         if (properties.contains('ServicesResolved') && device.connected) {
-          final wasResolved = _servicesResolvedStates[deviceId] ?? false;
-          final isResolved = device.servicesResolved;
-          _servicesResolvedStates[deviceId] = isResolved;
-          final fingerprint = isResolved ? _gattFingerprint(device) : null;
-          final previousFingerprint = _gattFingerprints[deviceId];
-          if ((wasResolved && !isResolved) ||
-              (isResolved &&
-                  previousFingerprint != null &&
-                  previousFingerprint != fingerprint)) {
-            _gattFingerprints.remove(deviceId);
-            _clearResolvedCharacteristics(deviceId);
-            handleGattServicesChanged(deviceId);
-          }
+          _gattSession.servicesResolvedChanged(device);
         }
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -934,201 +567,16 @@ class QuickBlueLinux extends QuickBluePlatform {
     _devicePropertySubscriptions[deviceId] = subscription;
   }
 
-  Future<void> _emitServiceDiscovery(BlueZDevice device) async {
-    final existing = _serviceDiscoveryEmits[device.address];
-    if (existing != null) {
-      return existing;
-    }
-
-    final emit = () async {
-      await _waitForServicesResolved(device);
-      _emitResolvedServices(device);
-    }();
-    _serviceDiscoveryEmits[device.address] = emit;
-    try {
-      await emit;
-    } finally {
-      if (identical(_serviceDiscoveryEmits[device.address], emit)) {
-        _serviceDiscoveryEmits.remove(device.address);
-      }
-    }
-  }
-
-  void _emitResolvedServices(BlueZDevice device) {
-    for (final service in device.gattServices) {
-      final serviceId = _formatUuid(service.uuid);
-      final characteristics = service.characteristics
-          .map(
-            (characteristic) => BluetoothCharacteristicInfo(
-              uuid: _formatUuid(characteristic.uuid),
-              canRead: characteristic.flags.contains(
-                BlueZGattCharacteristicFlag.read,
-              ),
-              canWriteWithResponse: characteristic.flags.contains(
-                BlueZGattCharacteristicFlag.write,
-              ),
-              canWriteWithoutResponse: characteristic.flags.contains(
-                BlueZGattCharacteristicFlag.writeWithoutResponse,
-              ),
-              canNotify: characteristic.flags.contains(
-                BlueZGattCharacteristicFlag.notify,
-              ),
-              canIndicate: characteristic.flags.contains(
-                BlueZGattCharacteristicFlag.indicate,
-              ),
-            ),
-          )
-          .toList(growable: false);
-      handleServiceDiscovered(device.address, serviceId, characteristics);
-    }
-    _servicesResolvedStates[device.address] = device.servicesResolved;
-    _gattFingerprints[device.address] = _gattFingerprint(device);
-    onServiceDiscoveryComplete(device.address);
-  }
-
-  String _gattFingerprint(BlueZDevice device) {
-    final services = device.gattServices.map((service) {
-      final characteristics =
-          service.characteristics
-              .map((characteristic) => _formatUuid(characteristic.uuid))
-              .toList()
-            ..sort();
-      return '${_formatUuid(service.uuid)}:${characteristics.join(',')}';
-    }).toList()..sort();
-    return services.join('|');
-  }
-
   Future<void> _waitForConnected(
     BlueZDevice device, {
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    return _waitForDeviceProperty(
+    return waitForDeviceProperty(
       device,
       propertyName: 'Connected',
       isReady: () => device.connected,
       timeout: timeout,
     );
-  }
-
-  Future<void> _waitForServicesResolved(
-    BlueZDevice device, {
-    Duration timeout = const Duration(seconds: 15),
-  }) async {
-    return _waitForDeviceProperty(
-      device,
-      propertyName: 'ServicesResolved',
-      isReady: () => device.servicesResolved,
-      timeout: timeout,
-    );
-  }
-
-  Future<void> _waitForDeviceProperty(
-    BlueZDevice device, {
-    required String propertyName,
-    required bool Function() isReady,
-    required Duration timeout,
-  }) async {
-    if (isReady()) {
-      return;
-    }
-
-    final completer = Completer<void>();
-    late final StreamSubscription<List<String>> subscription;
-    subscription = device.propertiesChanged.listen(
-      (properties) {
-        if (properties.contains(propertyName) &&
-            isReady() &&
-            !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-    );
-
-    try {
-      await completer.future.timeout(timeout);
-    } finally {
-      await subscription.cancel();
-    }
-  }
-
-  Future<_ResolvedCharacteristic> _resolveCharacteristic(
-    String deviceId,
-    String serviceId,
-    String characteristicId,
-  ) async {
-    final device = _getDeviceOrThrow(deviceId);
-    await _ensureConnectedDevice(device);
-    await _waitForServicesResolved(device);
-
-    final canonicalService = _canonicalizeUuid(serviceId);
-    final canonicalCharacteristic = _canonicalizeUuid(characteristicId);
-    final key = '$deviceId|$canonicalService|$canonicalCharacteristic';
-    final cached = _resolvedCharacteristics[key];
-    if (cached != null) {
-      return cached;
-    }
-
-    final service = device.gattServices.firstWhereOrNull(
-      (candidate) => _bluezUuidToCanonical(candidate.uuid) == canonicalService,
-    );
-    if (service == null) {
-      throw QuickBlueException(
-        code: QuickBlueErrorCode.notFound,
-        operation: 'resolveCharacteristic',
-        deviceId: deviceId,
-        serviceId: serviceId,
-        message: 'Service $serviceId not found on $deviceId.',
-      );
-    }
-
-    final characteristic = service.characteristics.firstWhereOrNull(
-      (candidate) =>
-          _bluezUuidToCanonical(candidate.uuid) == canonicalCharacteristic,
-    );
-    if (characteristic == null) {
-      throw QuickBlueException(
-        code: QuickBlueErrorCode.notFound,
-        operation: 'resolveCharacteristic',
-        deviceId: deviceId,
-        serviceId: serviceId,
-        characteristicId: characteristicId,
-        message:
-            'Characteristic $characteristicId not found on $serviceId for '
-            '$deviceId.',
-      );
-    }
-
-    final resolved = _ResolvedCharacteristic(
-      device: device,
-      serviceId: _formatUuid(service.uuid),
-      characteristicId: _formatUuid(characteristic.uuid),
-      characteristic: characteristic,
-    );
-    _resolvedCharacteristics[key] = resolved;
-    return resolved;
-  }
-
-  Uint8List _emitCharacteristicValue(
-    String deviceId,
-    String serviceId,
-    String characteristicId,
-    BlueZGattCharacteristic characteristic, {
-    List<int>? overrideValue,
-  }) {
-    final data = overrideValue ?? characteristic.value;
-    final value = data is Uint8List ? data : Uint8List.fromList(data);
-    handleCharacteristicValueChanged(
-      deviceId,
-      serviceId,
-      characteristicId,
-      value,
-    );
-    return value;
   }
 
   void _emitConnectionState(
@@ -1160,66 +608,9 @@ class QuickBlueLinux extends QuickBluePlatform {
     }
 
     _lastConnectionState.remove(deviceId);
-    _servicesResolvedStates.remove(deviceId);
-    _gattFingerprints.remove(deviceId);
-    _serviceDiscoveryEmits.remove(deviceId);
-    _clearResolvedCharacteristics(deviceId);
-
-    await _clearNotificationSubscriptions(deviceId);
-    await _cancelMappedSubscription(_scanDevicePropertySubscriptions, deviceId);
+    await _gattSession.clearDevice(deviceId);
+    await _scanSession.removeDevice(deviceId);
     await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
-  }
-
-  void _clearResolvedCharacteristics(String deviceId) {
-    _resolvedCharacteristics.removeWhere(
-      (key, _) => key.startsWith('$deviceId|'),
-    );
-  }
-
-  Future<void> _clearScanDevicePropertySubscriptions() async {
-    await _clearSubscriptions(_scanDevicePropertySubscriptions);
-  }
-
-  Future<void> _clearNotificationSubscriptions(String deviceId) async {
-    final subscriptions = _notificationSubscriptions.remove(deviceId);
-    if (subscriptions == null) {
-      return;
-    }
-    await _cancelSubscriptions(subscriptions.values);
-  }
-
-  Future<void> _stopNotificationsForClient(String deviceId) async {
-    final keys =
-        _notificationSubscriptions[deviceId]?.keys.toList() ?? const [];
-    for (final key in keys) {
-      final resolved = _resolvedCharacteristics['$deviceId|$key'];
-      if (resolved == null) {
-        continue;
-      }
-      try {
-        await resolved.characteristic.stopNotify();
-      } on Object catch (error, stackTrace) {
-        _logger.warning(
-          'Failed to release this engine\'s notification for $deviceId',
-          error,
-          stackTrace,
-        );
-      }
-    }
-  }
-
-  Future<void> _removeNotificationSubscription(
-    String deviceId,
-    String key,
-  ) async {
-    final subscriptions = _notificationSubscriptions[deviceId];
-    if (subscriptions == null) {
-      return;
-    }
-    await _cancelMappedSubscription(subscriptions, key);
-    if (subscriptions.isEmpty) {
-      _notificationSubscriptions.remove(deviceId);
-    }
   }
 
   Future<void> _cancelMappedSubscription<T>(
@@ -1228,22 +619,6 @@ class QuickBlueLinux extends QuickBluePlatform {
   ) async {
     final subscription = subscriptions.remove(key);
     await _cancelSubscription(subscription);
-  }
-
-  Future<void> _clearSubscriptions<T>(
-    Map<String, StreamSubscription<T>> subscriptions,
-  ) async {
-    final removedSubscriptions = subscriptions.values.toList();
-    subscriptions.clear();
-    await _cancelSubscriptions(removedSubscriptions);
-  }
-
-  Future<void> _cancelSubscriptions<T>(
-    Iterable<StreamSubscription<T>> subscriptions,
-  ) async {
-    for (final subscription in subscriptions) {
-      await subscription.cancel();
-    }
   }
 
   Future<void> _cancelSubscription<T>(
@@ -1261,126 +636,6 @@ class QuickBlueLinux extends QuickBluePlatform {
       onError: (Object error, StackTrace stackTrace) {
         _logger.warning(failureMessage, error, stackTrace);
       },
-    );
-  }
-
-  String _characteristicKey(String serviceId, String characteristicId) {
-    final serviceCanonical = _canonicalizeUuid(serviceId);
-    final characteristicCanonical = _canonicalizeUuid(characteristicId);
-    return '$serviceCanonical|$characteristicCanonical';
-  }
-
-  String _canonicalizeUuid(String uuid) {
-    final cleaned = uuid.replaceAll('-', '').toLowerCase();
-    if (cleaned.length == 4) {
-      return '0000${cleaned}00001000800000805f9b34fb';
-    }
-    if (cleaned.length == 8) {
-      return '${cleaned}00001000800000805f9b34fb';
-    }
-    if (cleaned.length == 32) {
-      return cleaned;
-    }
-    throw ArgumentError.value(uuid, 'uuid', 'Unsupported UUID format');
-  }
-
-  String _bluezUuidToCanonical(BlueZUUID uuid) {
-    return uuid.toString().replaceAll('-', '').toLowerCase();
-  }
-
-  String _formatUuid(BlueZUUID uuid) {
-    return _canonicalToDashed(_bluezUuidToCanonical(uuid));
-  }
-
-  String _canonicalToDashed(String canonical) {
-    if (canonical.length != 32) {
-      return canonical;
-    }
-    return '${canonical.substring(0, 8)}-${canonical.substring(8, 12)}-${canonical.substring(12, 16)}-${canonical.substring(16, 20)}-${canonical.substring(20)}';
-  }
-}
-
-Future<T> _runBlueZGattOperation<T>({
-  required String operation,
-  required String deviceId,
-  required String serviceId,
-  required String characteristicId,
-  required Future<T> Function() action,
-}) async {
-  try {
-    return await action();
-  } on BlueZNotAuthorizedException catch (error, stackTrace) {
-    Error.throwWithStackTrace(
-      QuickBlueSecurityException(
-        reason: QuickBlueSecurityErrorReason.insufficientAuthorization,
-        nativeDomain: 'org.bluez.Error.NotAuthorized',
-        nativeCode: null,
-        operation: operation,
-        deviceId: deviceId,
-        serviceId: serviceId,
-        characteristicId: characteristicId,
-        message: error.message.isEmpty
-            ? '$operation was not authorized by BlueZ.'
-            : error.message,
-      ),
-      stackTrace,
-    );
-  }
-}
-
-class _ResolvedCharacteristic {
-  _ResolvedCharacteristic({
-    required this.device,
-    required this.serviceId,
-    required this.characteristicId,
-    required this.characteristic,
-  });
-
-  final BlueZDevice device;
-  final String serviceId;
-  final String characteristicId;
-  final BlueZGattCharacteristic characteristic;
-}
-
-class _BlueZManufacturerData {
-  _BlueZManufacturerData({required this.head, required this.payload});
-
-  final Uint8List head;
-  final Uint8List payload;
-}
-
-extension _LinuxScanTransportExtension on LinuxScanTransport {
-  String get bluezValue {
-    return switch (this) {
-      LinuxScanTransport.auto => 'auto',
-      LinuxScanTransport.bredr => 'bredr',
-      LinuxScanTransport.le => 'le',
-    };
-  }
-}
-
-extension _BlueZDeviceExtension on BlueZDevice {
-  _BlueZManufacturerData get advertisedManufacturerData {
-    if (manufacturerData.isEmpty) {
-      return _BlueZManufacturerData(head: Uint8List(0), payload: Uint8List(0));
-    }
-
-    final sorted = manufacturerData.entries.toList()
-      ..sort((a, b) => a.key.id - b.key.id);
-    final payloadLength = sorted.fold<int>(
-      0,
-      (length, entry) => length + entry.value.length,
-    );
-    final payload = Uint8List(payloadLength);
-    var offset = 0;
-    for (final entry in sorted) {
-      payload.setRange(offset, offset + entry.value.length, entry.value);
-      offset += entry.value.length;
-    }
-
-    return _BlueZManufacturerData(
-      head: Uint8List.fromList(sorted.first.value),
-      payload: payload,
     );
   }
 }
