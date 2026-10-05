@@ -2,6 +2,8 @@
 
 ### Added
 
+- Publish a versioned Android APK of the example app with a SHA-256 checksum on
+  each GitHub Release; the evaluation APK uses the Android debug signing key.
 
 - Add optional caller-local `timeout` and `QuickBlueCancellationToken` to device
   connection, disconnect, service/GATT discovery, and MTU waits. Expired callers
@@ -26,6 +28,7 @@
   direct query is unavailable. Document write completion and backpressure on
   every platform, reject oversized Darwin writes, and fail fast when its
   write-without-response buffer is full.
+
 
 
 - Add subscription-owned `maintainConnection` with bounded exponential
