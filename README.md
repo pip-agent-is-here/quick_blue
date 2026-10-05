@@ -46,6 +46,18 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Contributing and verification](CONTRIBUTING.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
+## Download the Android example
+
+Published versioned GitHub Releases include a downloadable Android APK for the
+BLE explorer example. Download `quick_blue-example-<tag>-android.apk` from the
+[latest release](https://github.com/prefanatic/quick_blue/releases/latest),
+verify it with the adjacent `.sha256` file, then install it on an Android 8.0+
+(API 26+) device. Android may ask you to allow installs from the browser or file
+manager you used to open the APK. The example is signed with a debug key, so it
+is for evaluation only and is not an authenticated production app; uninstall a
+previously installed build if Android rejects an update signed with a different
+key. Bluetooth permissions and a nearby BLE device are needed to use BLE.
+
 > To use the code in this repository, follow the
 > [Git installation instructions](quick_blue/README.md#install). A hosted
 > `quick_blue` release may not contain the changes in this fork.

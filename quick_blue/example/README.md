@@ -2,6 +2,26 @@
 
 Demonstrates how to use the quick_blue plugin.
 
+## Download for Android
+
+The [GitHub Releases page](https://github.com/prefanatic/quick_blue/releases)
+provides an APK for each published versioned release. Download
+`quick_blue-example-<tag>-android.apk` and its adjacent `.sha256` checksum
+file. Verify the checksum, then open the APK on an Android 8.0 (API 26) or later
+device and allow installation from that source if asked:
+
+```sh
+sha256sum -c quick_blue-example-<tag>-android.apk.sha256
+```
+
+The app needs Bluetooth permissions and nearby BLE devices to demonstrate BLE.
+
+These evaluation APKs use Android's debug signing key. They are not suitable
+for production distribution or Play Store publishing. Android only allows an
+in-place update when the installed app and downloaded APK use the same signing
+key; uninstall the existing app first if installation reports a signature
+mismatch.
+
 ## BLE smoke test
 
 The integration smoke test scans for nearby BLE advertisements, tries to connect
