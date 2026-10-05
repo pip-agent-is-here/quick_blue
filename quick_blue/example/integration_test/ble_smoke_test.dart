@@ -145,6 +145,10 @@ void main() {
           final services = await device.discoverServices().timeout(
             _seconds(_serviceTimeoutSeconds, 15),
           );
+          debugPrint(
+            'BLE smoke services for ${device.deviceId}: '
+            '${services.map((service) => service.uuid).toList()}',
+          );
           _expectDiscoveredServices(
             device.deviceId,
             services,
