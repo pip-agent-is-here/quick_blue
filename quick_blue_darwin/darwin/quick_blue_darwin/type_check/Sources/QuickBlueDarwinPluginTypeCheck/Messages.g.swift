@@ -1091,6 +1091,7 @@ protocol QuickBlueApi {
   func setNotifiable(deviceId: String, service: String, characteristic: String, bleInputProperty: PlatformBleInputProperty) async throws
   func readValue(deviceId: String, service: String, characteristic: String) async throws -> FlutterStandardTypedData
   func writeValue(deviceId: String, service: String, characteristic: String, value: FlutterStandardTypedData, bleOutputProperty: PlatformBleOutputProperty) async throws
+  func maximumWriteValueLength(deviceId: String, bleOutputProperty: PlatformBleOutputProperty) throws -> Int64
   func requestMtu(deviceId: String, expectedMtu: Int64) throws -> Int64
   func openL2cap(deviceId: String, psm: Int64) throws
   func closeL2cap(deviceId: String) throws
@@ -1343,6 +1344,22 @@ class QuickBlueApiSetup {
       }
     } else {
       writeValueChannel.setMessageHandler(nil)
+    }
+    let maximumWriteValueLengthChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.quick_blue_darwin.QuickBlueApi.maximumWriteValueLength\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      maximumWriteValueLengthChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let deviceIdArg = args[0] as! String
+        let bleOutputPropertyArg = args[1] as! PlatformBleOutputProperty
+        do {
+          let result = try api.maximumWriteValueLength(deviceId: deviceIdArg, bleOutputProperty: bleOutputPropertyArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      maximumWriteValueLengthChannel.setMessageHandler(nil)
     }
     let requestMtuChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.quick_blue_darwin.QuickBlueApi.requestMtu\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

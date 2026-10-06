@@ -2,7 +2,8 @@
 # Type-check the Darwin BLE plugin on Linux.
 #   ./run.sh
 # Regenerates the platform-shimmed copies of the two real sources and builds
-# the harness package. Exits non-zero on any type error in the plugin.
+# the harness package and runs native-boundary tests against framework stubs.
+# Exits non-zero on any type error or test failure in the plugin.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,4 +21,4 @@ command -v swift >/dev/null || {
 }
 
 "$DIR/generate_sources.sh"
-swift build
+swift test

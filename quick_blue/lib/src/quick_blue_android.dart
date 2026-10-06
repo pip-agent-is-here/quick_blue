@@ -123,7 +123,7 @@ class QuickBlueAndroid extends QuickBluePlatform {
   Future<void> disconnect(String deviceId) {
     _ensureInitialized();
 
-    return _api.disconnect(deviceId);
+    return runDisconnectRequest(deviceId, () => _api.disconnect(deviceId));
   }
 
   @override
@@ -651,7 +651,14 @@ void _handleConnectionStateChange(
       ? null
       : _androidSecurityReason(nativeStatus);
   final error = securityReason == null
-      ? null
+      ? nativeStatus == null || nativeStatus == 0
+            ? null
+            : QuickBlueGattException(
+                status: nativeStatus,
+                operation: 'connection',
+                deviceId: stateChange.deviceId,
+                message: 'Connection failed with GATT status $nativeStatus.',
+              )
       : QuickBlueSecurityException(
           reason: securityReason,
           nativeDomain: 'android.bluetooth.BluetoothGatt',

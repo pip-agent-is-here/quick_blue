@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:async/async.dart';
+import 'package:meta/meta.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../models.dart';
@@ -11,6 +12,7 @@ import 'characteristic_lifecycle.dart';
 import 'connection_lifecycle.dart';
 import 'managed_connection_lifecycle.dart';
 import 'observability.dart';
+import 'operation_wait.dart';
 import 'quick_blue_exception.dart';
 import 'scan_lifecycle.dart';
 import 'service_discovery_lifecycle.dart';
@@ -208,6 +210,29 @@ abstract class QuickBluePlatform extends PlatformInterface {
     return scan();
   }
 
+  final _operationWaits = OperationWaitCoordinator();
+
+  /// Shares native work while bounding only this caller's wait.
+  ///
+  /// Platform implementations should continue to use their existing native
+  /// ownership rules; this helper never sends native cancellation.
+  @internal
+  Future<T> waitForDeviceOperation<T>({
+    required String deviceId,
+    required String operation,
+    required Future<T> Function() action,
+    int? argument,
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) => _operationWaits.run<T>(
+    deviceId: deviceId,
+    operation: operation,
+    action: action,
+    argument: argument,
+    timeout: timeout,
+    cancellationToken: cancellationToken,
+  );
+
   /// Returns a handle for a platform Bluetooth device identifier.
   BluetoothDevice device(String deviceId) {
     return BluetoothDevice.internal(
@@ -367,15 +392,34 @@ abstract class QuickBluePlatform extends PlatformInterface {
   );
   late final _managedConnectionLifecycleCoordinator =
       ManagedConnectionLifecycleCoordinator(
-        connect: (deviceId) => runWithSecurityRecovery(
-          deviceId,
-          () => _connectionLifecycleCoordinator.connectDevice(deviceId),
-        ),
-        disconnect: _connectionLifecycleCoordinator.disconnectDevice,
+        connect: _connectWithSecurityRecovery,
+        disconnect: _disconnectConnection,
         connectionStateStream: () => connectionStateStream,
       );
   final _securityRecoveryOperations =
       <String, Future<QuickBlueSecurityRecoveryResult>>{};
+  final _connectionEpochs = <String, int>{};
+
+  Future<void> _connectWithSecurityRecovery(String deviceId) {
+    final epoch = _connectionEpochs[deviceId] ?? 0;
+    return runWithSecurityRecovery(deviceId, () {
+      if ((_connectionEpochs[deviceId] ?? 0) != epoch) {
+        throw QuickBlueException(
+          code: QuickBlueErrorCode.cancelled,
+          failureReason: QuickBlueFailureReason.callerCancelled,
+          operation: 'connect',
+          deviceId: deviceId,
+          message: 'Connection was superseded by a local disconnect.',
+        );
+      }
+      return _connectionLifecycleCoordinator.connectDevice(deviceId);
+    });
+  }
+
+  Future<void> _disconnectConnection(String deviceId) {
+    _connectionEpochs[deviceId] = (_connectionEpochs[deviceId] ?? 0) + 1;
+    return _connectionLifecycleCoordinator.disconnectDevice(deviceId);
+  }
 
   /// Coordinates one security recovery attempt per device.
   Future<QuickBlueSecurityRecoveryResult> recoverSecurity(
@@ -457,7 +501,7 @@ abstract class QuickBluePlatform extends PlatformInterface {
         ),
       );
     }
-    return _connectionLifecycleCoordinator.connectDevice(deviceId);
+    return _connectWithSecurityRecovery(deviceId);
   }
 
   /// Maintains a connection until its stream subscription is cancelled.
@@ -480,9 +524,12 @@ abstract class QuickBluePlatform extends PlatformInterface {
   /// A pending connect for the same device is cancelled first. Other
   /// overlapping connection operations are rejected.
   Future<void> disconnectDevice(String deviceId) async {
-    await _managedConnectionLifecycleCoordinator.stopForExplicitDisconnect(
-      deviceId,
-    );
+    _connectionEpochs[deviceId] = (_connectionEpochs[deviceId] ?? 0) + 1;
+    if (_managedConnectionLifecycleCoordinator.isActive(deviceId)) {
+      await _managedConnectionLifecycleCoordinator.stopForExplicitDisconnect(
+        deviceId,
+      );
+    }
     await _connectionLifecycleCoordinator.disconnectDevice(deviceId);
   }
 
@@ -536,6 +583,7 @@ abstract class QuickBluePlatform extends PlatformInterface {
   }) {
     _gattGenerations[deviceId] = (_gattGenerations[deviceId] ?? 0) + 1;
     _serviceDiscoveryLifecycleCoordinator.handleGattServicesChanged(deviceId);
+    _operationWaits.forget(deviceId, 'discoverServices');
     _gattServiceChangedController.add(
       BluetoothGattServiceChange(
         deviceId: deviceId,
@@ -686,11 +734,45 @@ abstract class QuickBluePlatform extends PlatformInterface {
     BleOutputProperty bleOutputProperty,
   );
 
+  /// Returns the native maximum write payload in bytes for [bleOutputProperty].
+  ///
+  /// Returns null when the platform has no direct native limit query. This is
+  /// not inferred from MTU, and is not a guarantee about a characteristic's
+  /// application-level constraints. Query again after reconnecting.
+  Future<int?> maximumWriteValueLength(
+    String deviceId,
+    BleOutputProperty bleOutputProperty,
+  ) async => null;
+
   /// Requests or returns the negotiated MTU, depending on platform support.
   Future<int> requestMtu(String deviceId, int expectedMtu);
 
   /// Opens a BLE L2CAP socket for [deviceId].
   Future<BleL2capSocket> openL2cap(String deviceId, int psm);
+
+  final _connectedDevices = <String>{};
+  final _localDisconnectRequests = <String, Object>{};
+
+  /// Records local intent until the native disconnected callback arrives.
+  ///
+  /// Platform wrappers use this even when invoked without [disconnectDevice].
+  /// Native request completion can precede the actual state change.
+  @protected
+  Future<void> runDisconnectRequest(
+    String deviceId,
+    Future<void> Function() request,
+  ) async {
+    final token = Object();
+    _localDisconnectRequests[deviceId] = token;
+    try {
+      await request();
+    } catch (_) {
+      if (identical(_localDisconnectRequests[deviceId], token)) {
+        _localDisconnectRequests.remove(deviceId);
+      }
+      rethrow;
+    }
+  }
 
   void _handleConnectionChanged(
     String deviceId,
@@ -699,7 +781,56 @@ abstract class QuickBluePlatform extends PlatformInterface {
     QuickBlueException? error,
   ]) {
     if (state == BlueConnectionState.disconnected) {
-      _serviceDiscoveryLifecycleCoordinator.handleDisconnected(deviceId);
+      final wasConnected = _connectedDevices.remove(deviceId);
+      final localRequest = _localDisconnectRequests.remove(deviceId) != null;
+      final reason =
+          localRequest ||
+              _connectionLifecycleCoordinator.isDisconnecting(deviceId)
+          ? null
+          : wasConnected
+          ? QuickBlueFailureReason.remoteDisconnected
+          : _connectionLifecycleCoordinator.isConnecting(deviceId) &&
+                status == BleStatus.failure
+          ? QuickBlueFailureReason.connectionFailed
+          : null;
+      if (reason != null && error?.failureReason == null) {
+        error =
+            error?.withFailureReason(reason) ??
+            QuickBlueException(
+              code: QuickBlueErrorCode.operationFailed,
+              failureReason: reason,
+              operation: reason == QuickBlueFailureReason.connectionFailed
+                  ? 'connect'
+                  : 'connection',
+              deviceId: deviceId,
+              details: status,
+              message: reason == QuickBlueFailureReason.connectionFailed
+                  ? 'Failed to connect to Bluetooth device $deviceId.'
+                  : 'Bluetooth device $deviceId disconnected remotely.',
+            );
+      }
+      _serviceDiscoveryLifecycleCoordinator.handleDisconnected(
+        deviceId,
+        error:
+            localRequest ||
+                _connectionLifecycleCoordinator.isDisconnecting(deviceId)
+            ? error?.withFailureReason(
+                    QuickBlueFailureReason.callerCancelled,
+                  ) ??
+                  QuickBlueException(
+                    code: QuickBlueErrorCode.cancelled,
+                    failureReason: QuickBlueFailureReason.callerCancelled,
+                    operation: 'disconnect',
+                    deviceId: deviceId,
+                    message: 'This caller requested disconnection.',
+                  )
+            : error,
+      );
+      _operationWaits.forget(deviceId, 'discoverServices');
+    } else if (state == BlueConnectionState.connected &&
+        status == BleStatus.success) {
+      _connectedDevices.add(deviceId);
+      _localDisconnectRequests.remove(deviceId);
     }
     _connectionStateController.add(
       BluetoothConnectionStateChange(

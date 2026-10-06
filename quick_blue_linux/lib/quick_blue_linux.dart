@@ -332,16 +332,19 @@ class QuickBlueLinux extends QuickBluePlatform {
 
     try {
       await _gattSession.stopNotificationsForClient(deviceId);
-      await _connectionOwnership.detach(
-        deviceId,
-        onLastClient: () async {
-          try {
-            await device.disconnect();
-          } on BlueZNotConnectedException {
-            // Already disconnected, ignore.
-          }
-        },
-      );
+      await runDisconnectRequest(deviceId, () async {
+        await _connectionOwnership.detach(
+          deviceId,
+          onLastClient: () async {
+            try {
+              await device.disconnect();
+            } on BlueZNotConnectedException {
+              // Already disconnected, ignore.
+            }
+          },
+        );
+      });
+
       _emitConnectionState(
         deviceId,
         BlueConnectionState.disconnected,

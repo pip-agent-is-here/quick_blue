@@ -404,17 +404,21 @@ void main() {
 
       await pumpEventQueue();
 
-      expect(connectionEvents, <BluetoothConnectionStateChange>[
+      expect(connectionEvents, [
         BluetoothConnectionStateChange(
           deviceId: 'device-a',
           state: BlueConnectionState.connected,
           status: BleStatus.success,
         ),
-        BluetoothConnectionStateChange(
-          deviceId: 'device-a',
-          state: BlueConnectionState.disconnected,
-          status: BleStatus.failure,
-        ),
+        isA<BluetoothConnectionStateChange>()
+            .having((e) => e.deviceId, 'deviceId', 'device-a')
+            .having((e) => e.state, 'state', BlueConnectionState.disconnected)
+            .having((e) => e.status, 'status', BleStatus.failure)
+            .having(
+              (e) => e.error?.failureReason,
+              'reason',
+              QuickBlueFailureReason.remoteDisconnected,
+            ),
       ]);
 
       await subscription.cancel();

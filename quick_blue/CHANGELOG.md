@@ -2,6 +2,32 @@
 
 ### Added
 
+
+- Add optional caller-local `timeout` and `QuickBlueCancellationToken` to device
+  connection, disconnect, service/GATT discovery, and MTU waits. Expired callers
+  release their timers/listeners without cancelling work owned by other callers
+  or engines. Retries join outstanding native work, and late results/errors
+  retire it safely. Missing callbacks quarantine one operation per device/kind;
+  caller expiration does not imply native abort or reset.
+- Share concurrent device connects/disconnects and identical MTU requests.
+  Different MTU requests remain invalid while negotiation is outstanding;
+  federated/Pigeon APIs and managed-connection policy are unchanged.
+
+- Add nullable `QuickBlueException.failureReason` with portable
+  `QuickBlueFailureReason` values for remote link loss, caller cancellation,
+  and connection attempt failure, without parsing diagnostic messages.
+  Connection streams now attach an error for unexpected established link loss
+  even when the native status is success (the status is unchanged).
+  Native GATT/security diagnostics and subclasses are preserved; raw native
+  connection exceptions are wrapped with the original exception in `details`.
+
+- Expose `maximumWriteValueLength` on device and characteristic handles, using
+  CoreBluetooth's native per-mode limits on Darwin and returning null where a
+  direct query is unavailable. Document write completion and backpressure on
+  every platform, reject oversized Darwin writes, and fail fast when its
+  write-without-response buffer is full.
+
+
 - Add subscription-owned `maintainConnection` with bounded exponential
   backoff, retry exhaustion errors, and explicit cancellation/disconnect
   teardown across all platforms.
@@ -54,6 +80,11 @@
   discovery/disconnect races, and concurrent two-device isolation.
 
 ### Fixed
+
+- Remove the redundant workspace-level `bluez` dependency and document that
+  Linux consumers resolve it through `quick_blue_linux`. Add cold-cache external
+  Git installation, analysis, and Linux build coverage for Linux-only and
+  app-facing consumers in pinned and latest-Flutter CI.
 
 - Prevent a duplicate Android pairing request after a protected GATT operation
   starts an implicit bond. Security recovery now observes the bond state before

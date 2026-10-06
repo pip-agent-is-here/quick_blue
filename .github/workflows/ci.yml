@@ -86,6 +86,7 @@ jobs:
               - 'quick_blue_platform_interface/**'
             linux:
               - '.github/workflows/**'
+              - 'scripts/check-linux-consumer.py'
               - 'pubspec.yaml'
               - 'quick_blue/lib/**'
               - 'quick_blue/pubspec.yaml'
@@ -361,6 +362,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Check cold-cache external Git consumers
+        run: python3 scripts/check-linux-consumer.py
 
       - name: Build example
         run: |

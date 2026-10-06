@@ -117,10 +117,21 @@ class BluetoothCharacteristic {
     );
   }
 
+  /// Returns the device's native payload limit for this write mode, or null
+  /// when no direct native query exists. Does not infer a limit from MTU or
+  /// validate the characteristic's application-level constraints.
+  Future<int?> maximumWriteValueLength(BleOutputProperty bleOutputProperty) {
+    return _platform.maximumWriteValueLength(deviceId, bleOutputProperty);
+  }
+
   /// Writes [value] to the characteristic.
   ///
-  /// Completion timing follows the platform implementation and selected
-  /// [bleOutputProperty].
+  /// Without response, completion means local acceptance, not peer receipt:
+  /// Darwin completes at CoreBluetooth handoff (or rejects a full native buffer
+  /// with an invalid-state error); Android awaits its native write callback;
+  /// Linux awaits the BlueZ D-Bus reply; Windows awaits the WinRT write result.
+  /// Await writes sequentially to respect platform backpressure. No automatic
+  /// retry of busy errors, chunking, or protocol framing is performed.
   /// A rejected acknowledged write is retried once after security recovery.
   Future<void> write(Uint8List value, BleOutputProperty bleOutputProperty) {
     return QuickBlueInstrumentation.observeFuture<void>(

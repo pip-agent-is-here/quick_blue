@@ -7,6 +7,7 @@ import '../models.dart';
 import 'bluetooth_characteristic.dart';
 import 'bluetooth_gatt.dart';
 import 'observability.dart';
+import 'operation_wait.dart';
 import 'quick_blue_platform.dart';
 import 'quick_blue_exception.dart';
 
@@ -76,20 +77,31 @@ class BluetoothDevice {
 
   /// Connects and waits for a connected state event.
   ///
-  /// Throws [QuickBlueException] when another connection operation for this
-  /// device is already pending. A later [disconnect] supersedes this operation
-  /// and completes it with [QuickBlueErrorCode.cancelled]. Likewise, a later
+  /// Concurrent callers share one connection operation. A later [disconnect]
+  /// supersedes this operation and completes it with
+  /// [QuickBlueErrorCode.cancelled]. Likewise, a later
   /// connect supersedes a disconnect still waiting for its terminal native
   /// event. A temporarily busy shared native connection is retried
   /// automatically.
   /// Structured security failures trigger one coordinated recovery attempt and
   /// retry before a terminal exception is reported.
   ///
-  /// Timeouts are left to callers with normal `Future.timeout` composition.
-  Future<void> connect() {
-    return _platform.runWithSecurityRecovery(
-      deviceId,
-      () => _platform.connectDevice(deviceId),
+  /// [timeout] bounds this caller's wait, including security recovery, with a
+  /// `TimeoutException`. [cancellationToken] completes only this caller with
+  /// [QuickBlueErrorCode.cancelled]. Neither aborts native work or releases a
+  /// connected engine's ownership. An immediate retry joins outstanding work;
+  /// a missing native callback requires explicit disconnect/reconnect recovery.
+  /// Omitting both options preserves an unbounded wait.
+  Future<void> connect({
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) {
+    return _platform.waitForDeviceOperation<void>(
+      deviceId: deviceId,
+      operation: 'connect',
+      timeout: timeout,
+      cancellationToken: cancellationToken,
+      action: () => _platform.connectDevice(deviceId),
     );
   }
 
@@ -125,13 +137,22 @@ class BluetoothDevice {
   ///
   /// If a connect is pending, this call cancels it before disconnecting. A
   /// later connect similarly cancels this operation if its terminal native
-  /// event never arrives. Other overlapping operations of the same kind still
-  /// throw [QuickBlueException].
+  /// event never arrives. Concurrent disconnect callers share the operation.
   /// Pending service discovery is cancelled when the disconnected state is
   /// reported, allowing a later discovery attempt to start fresh.
   ///
-  /// Timeouts are left to callers with normal `Future.timeout` composition.
-  Future<void> disconnect() => _platform.disconnectDevice(deviceId);
+  /// [timeout] and [cancellationToken] stop only this caller's wait, as in
+  /// [connect]. They cannot undo a native disconnect already requested.
+  Future<void> disconnect({
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) => _platform.waitForDeviceOperation<void>(
+    deviceId: deviceId,
+    operation: 'disconnect',
+    timeout: timeout,
+    cancellationToken: cancellationToken,
+    action: () => _platform.disconnectDevice(deviceId),
+  );
 
   /// Returns the current pairing/bonding state for this device.
   Future<BluetoothBondState> bondState() {
@@ -205,11 +226,24 @@ class BluetoothDevice {
   /// Completes after the platform reports discovery completion. Concurrent
   /// calls share one discovery. Disconnecting the device cancels a pending
   /// discovery with [QuickBlueErrorCode.cancelled].
-  Future<List<BluetoothService>> discoverServices() {
+  ///
+  /// [timeout] and [cancellationToken] release only this caller's interest.
+  /// Outstanding work is retained until completion or native invalidation, so
+  /// retries join it and late callbacks cannot complete a replacement request.
+  Future<List<BluetoothService>> discoverServices({
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) {
     return QuickBlueInstrumentation.observeFuture<List<BluetoothService>>(
       kind: QuickBlueOperationKind.discoverServices,
       deviceId: deviceId,
-      action: () => _discoverServices(deviceId),
+      action: () => _platform.waitForDeviceOperation<List<BluetoothService>>(
+        deviceId: deviceId,
+        operation: 'discoverServices',
+        timeout: timeout,
+        cancellationToken: cancellationToken,
+        action: () => _discoverServices(deviceId),
+      ),
       measurements: (services) => <QuickBlueOperationMeasurement, num>{
         QuickBlueOperationMeasurement.resultCount: services.length,
       },
@@ -220,8 +254,14 @@ class BluetoothDevice {
   ///
   /// Prefer this when call sites know characteristic UUIDs but not service
   /// UUIDs yet.
-  Future<BluetoothGatt> discoverGatt() async {
-    final discovery = discoverServices();
+  Future<BluetoothGatt> discoverGatt({
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) async {
+    final discovery = discoverServices(
+      timeout: timeout,
+      cancellationToken: cancellationToken,
+    );
     final generation = _gattGeneration();
     final services = await discovery;
     return BluetoothGatt.internal(
@@ -303,13 +343,36 @@ class BluetoothDevice {
         .writeInChunks(value, bleOutputProperty, chunkSize: chunkSize);
   }
 
+  /// Returns the native maximum payload for the selected write mode, or null
+  /// when the platform cannot directly report it. Never derived from MTU.
+  ///
+  /// The result describes transport capacity, not application framing or a
+  /// guarantee that every characteristic accepts that length.
+  Future<int?> maximumWriteValueLength(BleOutputProperty bleOutputProperty) {
+    return _platform.maximumWriteValueLength(deviceId, bleOutputProperty);
+  }
+
   /// Requests or returns the negotiated MTU, depending on platform support.
-  Future<int> requestMtu(int expectedMtu) {
+  ///
+  /// Identical requests share outstanding work. [timeout] and
+  /// [cancellationToken] stop only this caller's wait, not MTU negotiation.
+  Future<int> requestMtu(
+    int expectedMtu, {
+    Duration? timeout,
+    QuickBlueCancellationToken? cancellationToken,
+  }) {
     return QuickBlueInstrumentation.observeFuture<int>(
       kind: QuickBlueOperationKind.requestMtu,
       deviceId: deviceId,
       requestedMtu: expectedMtu,
-      action: () => _platform.requestMtu(deviceId, expectedMtu),
+      action: () => _platform.waitForDeviceOperation<int>(
+        deviceId: deviceId,
+        operation: 'requestMtu',
+        argument: expectedMtu,
+        timeout: timeout,
+        cancellationToken: cancellationToken,
+        action: () => _platform.requestMtu(deviceId, expectedMtu),
+      ),
       measurements: (mtu) => <QuickBlueOperationMeasurement, num>{
         QuickBlueOperationMeasurement.negotiatedMtu: mtu,
       },

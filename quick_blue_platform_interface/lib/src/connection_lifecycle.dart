@@ -42,17 +42,32 @@ class ConnectionLifecycleCoordinator {
   final Stream<BluetoothConnectionStateChange> Function() connectionStateStream;
 
   final _activeOperations = <String, _ConnectionOperation>{};
+  final _requestGenerations = <String, int>{};
+
+  bool isDisconnecting(String deviceId) =>
+      _activeOperations[deviceId]?.kind == _ConnectionOperationKind.disconnect;
+
+  bool isConnecting(String deviceId) =>
+      _activeOperations[deviceId]?.kind == _ConnectionOperationKind.connect;
 
   Future<void> connectDevice(String deviceId) async {
+    final generation = (_requestGenerations[deviceId] ?? 0) + 1;
+    _requestGenerations[deviceId] = generation;
     final activeOperation = _activeOperations[deviceId];
-    if (activeOperation?.kind == _ConnectionOperationKind.disconnect) {
-      activeOperation!.cancellation.cancel();
+    if (activeOperation != null &&
+        (activeOperation.kind == _ConnectionOperationKind.disconnect ||
+            activeOperation.cancellation.isCancelled)) {
+      activeOperation.cancellation.cancel();
       try {
         await activeOperation.completed;
       } on Object {
         // The reconnect is authoritative even if the superseded disconnect
         // fails or was abandoned by a caller-side timeout.
       }
+    }
+
+    if (_requestGenerations[deviceId] != generation) {
+      throw _cancelledException(deviceId, 'connect');
     }
 
     return _runOperation(
@@ -108,14 +123,22 @@ class ConnectionLifecycleCoordinator {
   }
 
   Future<void> disconnectDevice(String deviceId) async {
+    final generation = (_requestGenerations[deviceId] ?? 0) + 1;
+    _requestGenerations[deviceId] = generation;
     final activeOperation = _activeOperations[deviceId];
-    if (activeOperation?.kind == _ConnectionOperationKind.connect) {
-      activeOperation!.cancellation.cancel();
+    if (activeOperation != null &&
+        (activeOperation.kind == _ConnectionOperationKind.connect ||
+            activeOperation.cancellation.isCancelled)) {
+      activeOperation.cancellation.cancel();
       try {
         await activeOperation.completed;
       } on Object {
         // The disconnect is authoritative even if the superseded connect fails.
       }
+    }
+
+    if (_requestGenerations[deviceId] != generation) {
+      throw _cancelledException(deviceId, 'disconnect');
     }
 
     return _runOperation(
@@ -222,6 +245,31 @@ class ConnectionLifecycleCoordinator {
           message: failureMessage,
         );
       }
+    } on Exception catch (error, stackTrace) {
+      if (connectionOperation.kind == _ConnectionOperationKind.connect) {
+        if (error is QuickBlueException) {
+          if (error.failureReason != null ||
+              error.code != QuickBlueErrorCode.operationFailed) {
+            rethrow;
+          }
+          Error.throwWithStackTrace(
+            error.withFailureReason(QuickBlueFailureReason.connectionFailed),
+            stackTrace,
+          );
+        }
+        Error.throwWithStackTrace(
+          QuickBlueException(
+            code: QuickBlueErrorCode.operationFailed,
+            failureReason: QuickBlueFailureReason.connectionFailed,
+            operation: operationName,
+            deviceId: deviceId,
+            message: failureMessage,
+            details: error,
+          ),
+          stackTrace,
+        );
+      }
+      rethrow;
     } finally {
       await stateSubscription.cancel();
       if (_activeOperations[deviceId] == connectionOperation) {
@@ -236,6 +284,7 @@ class ConnectionLifecycleCoordinator {
   ) {
     return QuickBlueException(
       code: QuickBlueErrorCode.cancelled,
+      failureReason: QuickBlueFailureReason.callerCancelled,
       operation: operationName,
       deviceId: deviceId,
       message:

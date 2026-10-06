@@ -776,7 +776,7 @@ void main() {
     await subscription.cancel();
   });
 
-  test('BluetoothDevice rejects overlapping disconnect operations', () async {
+  test('BluetoothDevice shares overlapping disconnect operations', () async {
     final platform = FakeQuickBluePlatform(disconnectsImmediately: false);
     addTearDown(platform.dispose);
 
@@ -784,26 +784,15 @@ void main() {
     final firstDisconnect = device.disconnect();
     await pumpEventQueue();
 
-    await expectLater(
-      device.disconnect(),
-      throwsA(
-        isA<QuickBlueException>()
-            .having(
-              (error) => error.code,
-              'code',
-              QuickBlueErrorCode.invalidState,
-            )
-            .having((error) => error.operation, 'operation', 'disconnect')
-            .having((error) => error.details, 'details', 'disconnect'),
-      ),
-    );
+    final secondDisconnect = device.disconnect();
+    expect(platform.calls, <String>['disconnect device-a']);
 
     platform.onConnectionChanged!(
       'device-a',
       BlueConnectionState.disconnected,
       BleStatus.success,
     );
-    await firstDisconnect;
+    await Future.wait(<Future<void>>[firstDisconnect, secondDisconnect]);
   });
 
   test(

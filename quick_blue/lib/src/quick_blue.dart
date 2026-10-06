@@ -13,6 +13,7 @@ export 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart
         QuickBlueDarwinRestorationEvent,
         QuickBlueDarwinRestorationObserver,
         QuickBlueErrorCode,
+        QuickBlueCancellationToken,
         QuickBlueException,
         QuickBlueGattException,
         QuickBlueObserver,
