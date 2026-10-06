@@ -15,6 +15,7 @@ export 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart
         QuickBlueErrorCode,
         QuickBlueCancellationToken,
         QuickBlueException,
+        QuickBlueFailureReason,
         QuickBlueGattException,
         QuickBlueObserver,
         QuickBlueOperation,
