@@ -2,25 +2,23 @@
 
 Demonstrates how to use the quick_blue plugin.
 
-## Download for Android
+## Download a release build
 
-The [GitHub Releases page](https://github.com/prefanatic/quick_blue/releases)
-provides an APK for each published versioned release. Download
-`quick_blue-example-<tag>-android.apk` and its adjacent `.sha256` checksum
-file. Verify the checksum, then open the APK on an Android 8.0 (API 26) or later
-device and allow installation from that source if asked:
+Published versioned [GitHub Releases](https://github.com/prefanatic/quick_blue/releases)
+include Android APK, iOS Simulator app, macOS app, Linux x64 bundle, and
+Windows x64 bundle assets. Each has an adjacent `.sha256` file; verify on Linux
+with `sha256sum -c <asset>.sha256`, on macOS with
+`shasum -a 256 -c <asset>.sha256`, or on Windows by comparing the checksum to
+`(Get-FileHash <asset> -Algorithm SHA256).Hash` in PowerShell. The workflow
+checks out the release tag before building.
 
-```sh
-sha256sum -c quick_blue-example-<tag>-android.apk.sha256
-```
-
-The app needs Bluetooth permissions and nearby BLE devices to demonstrate BLE.
-
-These evaluation APKs use Android's debug signing key. They are not suitable
-for production distribution or Play Store publishing. Android only allows an
-in-place update when the installed app and downloaded APK use the same signing
-key; uninstall the existing app first if installation reports a signature
-mismatch.
+These are unsigned evaluation builds, not store-ready apps. The Android APK is
+debug-signed. The iOS build targets Simulator only and cannot be installed on a
+physical iPhone or iPad. The macOS app is not Developer ID signed or notarized
+and may be blocked by Gatekeeper. The Linux x64 archive contains the Flutter
+bundle but not system libraries; compatible GTK/BlueZ libraries and the
+Quick Blue D-Bus policy are required. Extract the Windows x64 ZIP and launch
+`quick_blue_example.exe`.
 
 ## BLE smoke test
 
