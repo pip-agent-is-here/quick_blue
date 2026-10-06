@@ -46,17 +46,24 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Contributing and verification](CONTRIBUTING.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
-## Download the Android example
+## Download the example app
 
-Published versioned GitHub Releases include a downloadable Android APK for the
-BLE explorer example. Download `quick_blue-example-<tag>-android.apk` from the
-[latest release](https://github.com/prefanatic/quick_blue/releases/latest),
-verify it with the adjacent `.sha256` file, then install it on an Android 8.0+
-(API 26+) device. Android may ask you to allow installs from the browser or file
-manager you used to open the APK. The example is signed with a debug key, so it
-is for evaluation only and is not an authenticated production app; uninstall a
-previously installed build if Android rejects an update signed with a different
-key. Bluetooth permissions and a nearby BLE device are needed to use BLE.
+Each published versioned GitHub Release attaches example-app builds for
+Android, iOS Simulator, macOS, Linux x64, and Windows x64. Download the assets
+and adjacent `.sha256` files from the
+[Releases page](https://github.com/prefanatic/quick_blue/releases). Assets are
+built from the source pointed to by that release tag. Verify an asset with
+`sha256sum -c <asset>.sha256` on Linux, `shasum -a 256 -c <asset>.sha256` on
+macOS, or compare its SHA-256 with `Get-FileHash <asset> -Algorithm SHA256` in
+PowerShell.
+
+These are evaluation builds, not store-ready signed applications. The Android
+APK uses a debug key. The iOS artifact runs only in the iOS Simulator and is
+not an installable device IPA. The macOS app is not Developer ID signed or
+notarized, so Gatekeeper may block it. The Linux x64 bundle requires compatible
+GTK/BlueZ runtime libraries and the Linux D-Bus policy described in the package
+README. The Windows x64 ZIP contains the app bundle; extract it and launch
+`quick_blue_example.exe`.
 
 > To use the code in this repository, follow the
 > [Git installation instructions](quick_blue/README.md#install). A hosted
