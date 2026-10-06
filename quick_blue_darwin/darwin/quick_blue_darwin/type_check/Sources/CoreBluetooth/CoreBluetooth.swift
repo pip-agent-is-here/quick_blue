@@ -163,6 +163,8 @@ open class CBManager: NSObject {
 }
 
 open class CBCentralManager: CBManager {
+    // Harness-only fixtures for exercising the real plugin against native stubs.
+    public static var testPeripherals: [CBPeripheral] = []
     open var delegate: CBCentralManagerDelegate?
     open var isScanning: Bool = false
 
@@ -176,7 +178,9 @@ open class CBCentralManager: CBManager {
     open func connect(_ peripheral: CBPeripheral, options: [String: Any]? = nil) {}
     open func cancelPeripheralConnection(_ peripheral: CBPeripheral) {}
     open func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral] { [] }
-    open func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral] { [] }
+    open func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral] {
+        Self.testPeripherals.filter { identifiers.contains($0.identifier) }
+    }
 }
 
 #if os(Linux)

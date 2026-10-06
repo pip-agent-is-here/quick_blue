@@ -1401,6 +1401,25 @@ class QuickBlueApi {
     ;
   }
 
+  Future<int> maximumWriteValueLength(String deviceId, PlatformBleOutputProperty bleOutputProperty) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.quick_blue_darwin.QuickBlueApi.maximumWriteValueLength$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[deviceId, bleOutputProperty]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as int;
+  }
+
   Future<int> requestMtu(String deviceId, int expectedMtu) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.quick_blue_darwin.QuickBlueApi.requestMtu$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

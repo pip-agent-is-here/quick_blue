@@ -145,12 +145,18 @@ abstract class QuickBlueApi {
   // Async so the reply can be deferred until the peripheral acknowledges a
   // write-with-response (via didWriteValueFor). Writes-without-response have no
   // acknowledgement and complete as soon as they are handed to CoreBluetooth.
+  // A full native send buffer is rejected before handoff.
   @async
   void writeValue(
     String deviceId,
     String service,
     String characteristic,
     Uint8List value,
+    PlatformBleOutputProperty bleOutputProperty,
+  );
+
+  int maximumWriteValueLength(
+    String deviceId,
     PlatformBleOutputProperty bleOutputProperty,
   );
 

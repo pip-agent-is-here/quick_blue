@@ -137,13 +137,11 @@ void main() {
           }
 
           if (candidate.shouldConnect) {
-            await device.connect().timeout(
-              _seconds(_connectTimeoutSeconds, 12),
-            );
+            await device.connect(timeout: _seconds(_connectTimeoutSeconds, 12));
           }
 
-          final services = await device.discoverServices().timeout(
-            _seconds(_serviceTimeoutSeconds, 15),
+          final services = await device.discoverServices(
+            timeout: _seconds(_serviceTimeoutSeconds, 15),
           );
           debugPrint(
             'BLE smoke services for ${device.deviceId}: '
@@ -168,8 +166,8 @@ void main() {
             ).timeout(_seconds(_writeTimeoutSeconds, 8));
           }
           if (candidate.shouldDisconnect) {
-            await device.disconnect().timeout(
-              _seconds(_disconnectTimeoutSeconds, 8),
+            await device.disconnect(
+              timeout: _seconds(_disconnectTimeoutSeconds, 8),
             );
           }
 

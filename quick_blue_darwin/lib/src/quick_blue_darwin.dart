@@ -187,7 +187,7 @@ class QuickBlueDarwin extends QuickBluePlatform {
   Future<void> disconnect(String deviceId) {
     _ensureInitialized();
 
-    return _api.disconnect(deviceId);
+    return runDisconnectRequest(deviceId, () => _api.disconnect(deviceId));
   }
 
   @override
@@ -286,6 +286,18 @@ class QuickBlueDarwin extends QuickBluePlatform {
       serviceId: service,
       characteristicId: characteristic,
       action: () => _api.readValue(deviceId, service, characteristic),
+    );
+  }
+
+  @override
+  Future<int?> maximumWriteValueLength(
+    String deviceId,
+    BleOutputProperty bleOutputProperty,
+  ) {
+    _ensureInitialized();
+    return _api.maximumWriteValueLength(
+      deviceId,
+      bleOutputProperty.toPlatformBleOutputProperty(),
     );
   }
 

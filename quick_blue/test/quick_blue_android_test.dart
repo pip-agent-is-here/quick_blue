@@ -916,6 +916,80 @@ void main() {
       );
     });
 
+    test('remote disconnect preserves unknown Android native status', () async {
+      final platform = QuickBlueAndroid();
+      binaryMessenger.setMockDecodedMessageHandler<Object?>(
+        const BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.quick_blue.QuickBlueApi.isBluetoothAvailable',
+          messages.QuickBlueApi.pigeonChannelCodec,
+        ),
+        (_) async => <Object?>[true],
+      );
+      await platform.isBluetoothAvailable();
+      await _sendFlutterApiMessage(
+        'onConnectionStateChange',
+        messages.PlatformConnectionStateChange(
+          deviceId: 'device-a',
+          state: messages.PlatformConnectionState.connected,
+          gattStatus: messages.PlatformGattStatus.success,
+          nativeStatus: 0,
+        ),
+      );
+      final event = platform.connectionStateStream.first;
+      await _sendFlutterApiMessage(
+        'onConnectionStateChange',
+        messages.PlatformConnectionStateChange(
+          deviceId: 'device-a',
+          state: messages.PlatformConnectionState.disconnected,
+          gattStatus: messages.PlatformGattStatus.failure,
+          nativeStatus: 999,
+        ),
+      );
+      final error = (await event).error as QuickBlueGattException;
+      expect(error.failureReason, QuickBlueFailureReason.remoteDisconnected);
+      expect(error.status, 999);
+      expect(error.details, 999);
+    });
+
+    test(
+      'native local disconnect intent survives request acceptance',
+      () async {
+        final platform = QuickBlueAndroid();
+        for (final method in ['isBluetoothAvailable', 'disconnect']) {
+          binaryMessenger.setMockDecodedMessageHandler<Object?>(
+            BasicMessageChannel<Object?>(
+              'dev.flutter.pigeon.quick_blue.QuickBlueApi.$method',
+              messages.QuickBlueApi.pigeonChannelCodec,
+            ),
+            (_) async => <Object?>[
+              method == 'isBluetoothAvailable' ? true : null,
+            ],
+          );
+        }
+        await platform.isBluetoothAvailable();
+        await _sendFlutterApiMessage(
+          'onConnectionStateChange',
+          messages.PlatformConnectionStateChange(
+            deviceId: 'device-a',
+            state: messages.PlatformConnectionState.connected,
+            gattStatus: messages.PlatformGattStatus.success,
+          ),
+        );
+        await platform.disconnect('device-a');
+        final event = platform.connectionStateStream.first;
+        await _sendFlutterApiMessage(
+          'onConnectionStateChange',
+          messages.PlatformConnectionStateChange(
+            deviceId: 'device-a',
+            state: messages.PlatformConnectionState.disconnected,
+            gattStatus: messages.PlatformGattStatus.success,
+            nativeStatus: 0,
+          ),
+        );
+        expect((await event).error, isNull);
+      },
+    );
+
     test(
       'forwards known connection states and ignores unknown connection states',
       () async {
@@ -962,17 +1036,21 @@ void main() {
 
         await pumpEventQueue();
 
-        expect(connectionEvents, <BluetoothConnectionStateChange>[
+        expect(connectionEvents, [
           BluetoothConnectionStateChange(
             deviceId: 'device-a',
             state: BlueConnectionState.connected,
             status: BleStatus.success,
           ),
-          BluetoothConnectionStateChange(
-            deviceId: 'device-a',
-            state: BlueConnectionState.disconnected,
-            status: BleStatus.failure,
-          ),
+          isA<BluetoothConnectionStateChange>()
+              .having((e) => e.deviceId, 'deviceId', 'device-a')
+              .having((e) => e.state, 'state', BlueConnectionState.disconnected)
+              .having((e) => e.status, 'status', BleStatus.failure)
+              .having(
+                (e) => e.error?.failureReason,
+                'reason',
+                QuickBlueFailureReason.remoteDisconnected,
+              ),
         ]);
 
         await subscription.cancel();

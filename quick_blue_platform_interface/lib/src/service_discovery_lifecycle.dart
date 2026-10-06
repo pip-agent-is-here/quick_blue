@@ -50,9 +50,10 @@ class ServiceDiscoveryLifecycleCoordinator {
     _completeController.add(deviceId);
   }
 
-  void handleDisconnected(String deviceId) {
+  void handleDisconnected(String deviceId, {QuickBlueException? error}) {
     _cancelPending(
       deviceId,
+      cause: error,
       message:
           'Service discovery for Bluetooth device $deviceId was cancelled '
           'because the device disconnected.',
@@ -68,13 +69,19 @@ class ServiceDiscoveryLifecycleCoordinator {
     );
   }
 
-  void _cancelPending(String deviceId, {required String message}) {
+  void _cancelPending(
+    String deviceId, {
+    required String message,
+    QuickBlueException? cause,
+  }) {
     final operation = _pendingDiscoveries.remove(deviceId);
     if (operation == null) {
       return;
     }
     final error = QuickBlueException(
       code: QuickBlueErrorCode.cancelled,
+      failureReason: cause?.failureReason,
+      details: cause,
       operation: 'discoverServices',
       deviceId: deviceId,
       message: message,

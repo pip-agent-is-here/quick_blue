@@ -101,7 +101,7 @@ class QuickBlueWindows extends QuickBluePlatform {
   @override
   Future<void> disconnect(String deviceId) {
     _ensureInitialized();
-    return _api.disconnect(deviceId);
+    return runDisconnectRequest(deviceId, () => _api.disconnect(deviceId));
   }
 
   @override

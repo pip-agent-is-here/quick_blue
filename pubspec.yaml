@@ -12,11 +12,10 @@ workspace:
   - quick_blue_platform_interface
   - quick_blue_windows
 
-# Keep hosted runtime packages visible at the workspace surface. This mirrors
-# the publishable packages' dependency graph for reliable cold-cache resolves.
+# Workspace-level constraints. Platform-only dependencies such as bluez belong
+# to the package that imports them, not the workspace or external consumers.
 dependencies:
   async: ^2.13.0
-  bluez: ^0.8.3
   collection: ^1.19.0
   convert: ^3.0.0
   dbus: ^0.7.14

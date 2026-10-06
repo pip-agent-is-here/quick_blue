@@ -27,6 +27,18 @@ enum QuickBlueErrorCode {
   cancelled,
 }
 
+/// Portable failure causes, not guarantees that retrying will succeed.
+enum QuickBlueFailureReason {
+  /// An established connection ended without this caller requesting disconnect.
+  remoteDisconnected,
+
+  /// This caller cancelled or superseded the operation.
+  callerCancelled,
+
+  /// A connection attempt failed before establishing a connection.
+  connectionFailed,
+}
+
 /// Exception type for errors created by QuickBlue Dart code.
 ///
 /// Platform implementations may translate native failures into this type when
@@ -41,10 +53,30 @@ class QuickBlueException implements Exception {
     this.serviceId,
     this.characteristicId,
     this.details,
+    this.failureReason,
   });
 
   /// Machine-readable error category.
   final QuickBlueErrorCode code;
+
+  /// Portable cause, or null when unknown. Independent of [code] and the
+  /// security reason on [QuickBlueSecurityException].
+  /// Never infer this value from [message].
+  final QuickBlueFailureReason? failureReason;
+
+  /// Attaches operation context without discarding native diagnostics.
+  QuickBlueException withFailureReason(QuickBlueFailureReason reason) {
+    return QuickBlueException(
+      code: code,
+      message: message,
+      operation: operation,
+      deviceId: deviceId,
+      serviceId: serviceId,
+      characteristicId: characteristicId,
+      details: details,
+      failureReason: reason,
+    );
+  }
 
   /// Human-readable explanation of the failure.
   final String message;
@@ -91,10 +123,24 @@ class QuickBlueGattException extends QuickBlueException {
     super.deviceId,
     super.serviceId,
     super.characteristicId,
+    super.failureReason,
   }) : super(code: QuickBlueErrorCode.operationFailed, details: status);
 
   /// Raw numeric GATT status reported by the native platform.
   final int status;
+
+  @override
+  QuickBlueGattException withFailureReason(QuickBlueFailureReason reason) {
+    return QuickBlueGattException(
+      status: status,
+      message: message,
+      operation: operation,
+      deviceId: deviceId,
+      serviceId: serviceId,
+      characteristicId: characteristicId,
+      failureReason: reason,
+    );
+  }
 }
 
 /// Security failures that may require pairing or bond recovery.
@@ -147,6 +193,7 @@ class QuickBlueSecurityException extends QuickBlueException {
     super.serviceId,
     super.characteristicId,
     this.recoveryResult,
+    super.failureReason,
   }) : super(code: QuickBlueErrorCode.operationFailed);
 
   /// Portable security failure category.
@@ -178,6 +225,23 @@ class QuickBlueSecurityException extends QuickBlueException {
       serviceId: serviceId,
       characteristicId: characteristicId,
       recoveryResult: result,
+      failureReason: failureReason,
+    );
+  }
+
+  @override
+  QuickBlueSecurityException withFailureReason(QuickBlueFailureReason reason) {
+    return QuickBlueSecurityException(
+      reason: this.reason,
+      nativeDomain: nativeDomain,
+      nativeCode: nativeCode,
+      message: message,
+      operation: operation,
+      deviceId: deviceId,
+      serviceId: serviceId,
+      characteristicId: characteristicId,
+      recoveryResult: recoveryResult,
+      failureReason: reason,
     );
   }
 }

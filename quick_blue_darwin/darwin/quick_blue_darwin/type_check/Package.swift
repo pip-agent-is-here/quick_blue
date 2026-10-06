@@ -34,6 +34,11 @@ let package = Package(
             path: "Sources/QuickBlueDarwinPluginTypeCheck",
             swiftSettings: [.define("QUICK_BLUE_TYPE_CHECK_DARWIN")]
         ),
+        .testTarget(
+            name: "NativeWriteTests",
+            dependencies: ["QuickBlueDarwinPluginTypeCheck", "CoreBluetooth", "Flutter", "QuickBlueRestorationSummary"],
+            path: "Tests/NativeWriteTests"
+        ),
     ],
     swiftLanguageVersions: [.v5]
 )

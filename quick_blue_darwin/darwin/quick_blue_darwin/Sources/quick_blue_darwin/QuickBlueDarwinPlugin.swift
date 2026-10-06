@@ -1612,6 +1612,24 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
                         details: nil
                     )
                 }
+                let writeType: CBCharacteristicWriteType =
+                    isWithResponse ? .withResponse : .withoutResponse
+                guard value.data.count <= peripheral.maximumWriteValueLength(for: writeType)
+                else {
+                    throw PigeonError(
+                        code: "IllegalArgument",
+                        message: "Write payload exceeds the native limit for this response mode",
+                        details: nil
+                    )
+                }
+                guard isWithResponse || peripheral.canSendWriteWithoutResponse
+                else {
+                    throw PigeonError(
+                        code: "InvalidState",
+                        message: "CoreBluetooth write-without-response buffer is full; retry later",
+                        details: nil
+                    )
+                }
                 if isWithResponse {
                     // Resolved when didWriteValueFor fires for this write.
                     host.pendingWrites[
@@ -1622,7 +1640,7 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
                 peripheral.writeValue(
                     value.data,
                     for: cbCharacteristic,
-                    type: isWithResponse ? .withResponse : .withoutResponse
+                    type: writeType
                 )
             }
         } catch {
@@ -1633,6 +1651,17 @@ public class QuickBlueDarwinPlugin: NSObject, FlutterPlugin, QuickBlueApi {
             // CoreBluetooth does not acknowledge writes without response, so the
             // call is complete once the value has been handed off.
             completion(.success(()))
+        }
+    }
+
+    func maximumWriteValueLength(
+        deviceId: String,
+        bleOutputProperty: PlatformBleOutputProperty
+    ) throws -> Int64 {
+        return try withHostPeripheral(deviceId) { _, peripheral in
+            Int64(peripheral.maximumWriteValueLength(
+                for: bleOutputProperty == .withoutResponse ? .withoutResponse : .withResponse
+            ))
         }
     }
 

@@ -73,6 +73,11 @@ For reproducible builds, replace `master` with a tested commit SHA in all five
 entries. If these changes become available in a hosted release, replace the Git
 dependency and overrides with the corresponding version constraint.
 
+Linux consumers do not need a direct `bluez` dependency: `quick_blue_linux`
+declares it and Pub resolves it transitively, including from an empty cache.
+Keep all Git entries on the same revision; the repository workspace is not a
+consumer dependency and does not supply its dependencies to your app.
+
 Then import it:
 
 ```dart
