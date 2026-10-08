@@ -3,7 +3,7 @@ type: "Playbook"
 title: "Share a connection across engines"
 description: "Attach the receiving engine before detaching the previous owner."
 tags: ["connections", "multi-engine"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/ConnectionClientSet.kt"}, {"id": "source2", "resource": "../quick_blue_darwin/darwin/quick_blue_darwin/connection_ownership/Sources/QuickBlueConnectionOwnership/SharedConnectionOwnership.swift"}, {"id": "source3", "resource": "../quick_blue_windows/windows/connection_ownership.h"}, {"id": "source4", "resource": "../quick_blue_linux/lib/src/connection_ownership.dart"}, {"id": "source5", "resource": "../quick_blue/example/integration_test/android_multi_engine_test.dart"}, {"id": "source6", "resource": "../quick_blue/example/integration_test/ios_multi_engine_test.dart"}]
 ---
 

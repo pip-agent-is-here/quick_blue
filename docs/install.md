@@ -3,7 +3,7 @@ type: "Playbook"
 title: "Install from Git"
 description: "Use a consistent repository revision for every federated package."
 tags: ["setup", "dependencies"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/pubspec.yaml"}, {"id": "source2", "resource": "../quick_blue_platform_interface/pubspec.yaml"}, {"id": "source3", "resource": "../quick_blue/README.md"}]
 ---
 

@@ -3,7 +3,7 @@ type: "Reference"
 title: "Configure each platform"
 description: "Set permissions, entitlements and host policy before using Bluetooth."
 tags: ["setup", "permissions", "android", "darwin", "linux", "windows"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/android/src/main/AndroidManifest.xml"}, {"id": "source2", "resource": "../quick_blue/README.md"}, {"id": "source3", "resource": "../quick_blue_linux/dbus/dev.quick_blue.Connection.conf"}, {"id": "source4", "resource": "../quick_blue_windows/README.md"}]
 ---
 

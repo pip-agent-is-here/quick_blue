@@ -3,7 +3,7 @@ type: "Reference"
 title: "Integration-test Dart defines"
 description: "Look up compile-time test inputs and their source defaults."
 tags: ["example", "testing", "configuration"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/example/integration_test/ble_smoke_test.dart"}, {"id": "source2", "resource": "../quick_blue/example/integration_test/ble_characteristic_benchmark_test.dart"}, {"id": "source3", "resource": "../quick_blue/example/integration_test/ble_lifecycle_stress_test.dart"}, {"id": "source4", "resource": "../quick_blue/example/integration_test/ble_ui_switch_test.dart"}, {"id": "source5", "resource": "../quick_blue/example/integration_test/macos_ble_switch_test.dart"}, {"id": "source6", "resource": "../quick_blue/example/integration_test/android_multi_engine_test.dart"}, {"id": "source7", "resource": "../quick_blue/example/integration_test/ios_multi_engine_test.dart"}]
 ---
 

@@ -3,7 +3,7 @@ type: "Reference"
 title: "Runtime capability matrix"
 description: "Gate optional APIs using modes rather than assuming uniform platform support."
 tags: ["platforms", "capabilities"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/models.dart"}, {"id": "source2", "resource": "../quick_blue/lib/src/quick_blue_android.dart"}, {"id": "source3", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/QuickBluePlugin.kt"}, {"id": "source4", "resource": "../quick_blue_darwin/lib/src/quick_blue_darwin.dart"}, {"id": "source5", "resource": "../quick_blue_linux/lib/quick_blue_linux.dart"}, {"id": "source6", "resource": "../quick_blue_windows/lib/src/quick_blue_windows.dart"}, {"id": "source7", "resource": "../quick_blue_platform_interface/lib/src/quick_blue_platform.dart"}]
 ---
 

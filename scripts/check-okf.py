@@ -106,8 +106,9 @@ def check(bundle):
             require(isinstance(metadata.get("tags"), list) and
                     all(isinstance(tag, str) and tag for tag in metadata["tags"]),
                     path, "tags must be a string list")
-            generated = metadata.get("generated", {})
-            require(isinstance(generated, dict), path, "generated must be a mapping")
+            generated = metadata.get("generated")
+            if "generated" in metadata:
+                require(isinstance(generated, dict), path, "generated must be a mapping")
             if isinstance(generated, dict):
                 actor = generated.get("by", "")
                 require(isinstance(actor, str) and bool(re.fullmatch(

@@ -3,7 +3,7 @@ type: "Playbook"
 title: "Scan, connect and read"
 description: "Run a small read-only workflow with explicit cleanup and caller timeouts."
 tags: ["getting-started", "scan", "gatt"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/lib/src/quick_blue.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}]
 ---
 

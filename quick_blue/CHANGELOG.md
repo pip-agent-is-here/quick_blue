@@ -37,7 +37,9 @@
 - Add a source-linked OKF v0.2 knowledge bundle covering setup, device workflows,
   platform capabilities, L2CAP, diagnostics and verification, plus an ongoing
   requirement in both agent and contribution instructions to read, update and
-  verify the bundle as part of ordinary repository changes.
+  verify the bundle as part of ordinary repository changes. Keep the bundle
+  without a separate update log or generation metadata; regression-test the
+  documentation quality gate while preserving source and link validation.
 
 - Add subscription-owned `maintainConnection` with bounded exponential
   backoff, retry exhaustion errors, and explicit cancellation/disconnect

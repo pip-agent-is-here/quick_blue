@@ -35,7 +35,6 @@ nav = [
     { "Integration-test options" = "example-options.md" },
     { "Verification" = "testing.md" },
     { "Documentation maintenance" = "maintenance.md" },
-    { "Update log" = "log.md" },
   ] },
 ]
 

@@ -6,6 +6,7 @@ on:
       - 'docs/**'
       - 'zensical.toml'
       - 'scripts/check-okf.py'
+      - 'scripts/test_check_okf.py'
       - 'scripts/check-docs-site.py'
       - 'scripts/requirements-docs.txt'
       - '.github/workflows/docs.yml'
@@ -15,6 +16,7 @@ on:
       - 'docs/**'
       - 'zensical.toml'
       - 'scripts/check-okf.py'
+      - 'scripts/test_check_okf.py'
       - 'scripts/check-docs-site.py'
       - 'scripts/requirements-docs.txt'
       - '.github/workflows/docs.yml'
@@ -34,6 +36,7 @@ jobs:
       # Zensical recommends clean builds without CI build caches.
       - run: python -m pip install -r scripts/requirements-docs.txt
       - run: python scripts/check-okf.py
+      - run: python -m unittest discover -s scripts -p 'test_check_okf.py'
       - run: zensical build --clean
       - run: python scripts/check-docs-site.py
       - uses: actions/upload-pages-artifact@v5
