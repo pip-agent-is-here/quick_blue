@@ -3,7 +3,7 @@ type: "Reference"
 title: "Scan results and filters"
 description: "Own scanning through subscriptions and select portable or native scan controls."
 tags: ["scan", "filters"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/scan_lifecycle.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/models.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/quick_blue_platform_scan_test.dart"}, {"id": "source4", "resource": "../quick_blue_linux/lib/quick_blue_linux.dart"}]
 ---
 

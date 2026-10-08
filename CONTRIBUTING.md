@@ -16,8 +16,8 @@ the same change rather than following stale prose.
 
 For every change to behavior, APIs, examples, supported platforms, setup, or
 workflows, update the affected OKF concepts in the same change. Keep source
-references, examples, index descriptions/cross-links, `docs/log.md`, public README
-entry points, and `quick_blue/CHANGELOG.md` current as applicable. Follow
+references, examples, index descriptions/cross-links, public README entry points,
+and `quick_blue/CHANGELOG.md` current as applicable. Follow
 `docs/maintenance.md` for OKF v0.2 metadata and reserved-file rules. In the handoff,
 list the docs updated or explain concretely why no documentation was affected.
 

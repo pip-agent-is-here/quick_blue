@@ -3,7 +3,7 @@ type: "Reference"
 title: "Known boundaries and pitfalls"
 description: "Distinguish implemented support from runtime readiness and hardware evidence."
 tags: ["limitations", "platforms"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linux.dart"}, {"id": "source2", "resource": "../quick_blue_windows/lib/src/quick_blue_windows.dart"}, {"id": "source3", "resource": "../quick_blue_darwin/test/quick_blue_darwin_test.dart"}, {"id": "source4", "resource": "../quick_blue/example/integration_test/android_multi_engine_test.dart"}, {"id": "source5", "resource": "../quick_blue/example/integration_test/ios_multi_engine_test.dart"}]
 ---
 

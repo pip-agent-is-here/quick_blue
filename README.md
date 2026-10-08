@@ -83,6 +83,8 @@ README. The Windows x64 ZIP contains the app bundle; extract it and launch
 The [plain Markdown OKF bundle](docs/index.md) is the canonical detailed
 documentation for requirements, permissions, APIs, platform limitations, and
 multi-engine behavior. It is readable without a website or special tooling.
+Maintain it with source-linked updates and validation; no separate update log
+or generation metadata is required.
 
 The same files power a searchable Zensical site with light/dark themes. See
 [documentation maintenance](docs/maintenance.md#preview-and-publish-the-site)

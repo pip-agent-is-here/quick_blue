@@ -3,7 +3,7 @@ type: "Reference"
 title: "Connection lifetimes and retries"
 description: "Choose one-shot or subscription-owned connections and handle overlapping operations."
 tags: ["connections", "lifecycle"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/managed_connection_lifecycle.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}]
 ---
 

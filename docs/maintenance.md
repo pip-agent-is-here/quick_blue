@@ -3,7 +3,7 @@ type: "Playbook"
 title: "Maintain the knowledge bundle"
 description: "Read relevant source docs before work and update and verify them with every behavior change."
 tags: ["development", "agents", "okf", "documentation"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:46:32+00:00"}
+
 sources: [{"id": "source1", "resource": "../AGENTS.md"}, {"id": "source2", "resource": "../CONTRIBUTING.md"}, {"id": "source3", "resource": "../quick_blue/CHANGELOG.md"}, {"id": "site", "resource": "../zensical.toml"}, {"id": "pages", "resource": "../.github/workflows/docs.yml"}]
 ---
 
@@ -23,7 +23,7 @@ sources: [{"id": "source1", "resource": "../AGENTS.md"}, {"id": "source2", "reso
 
 Behavior, APIs, examples, supported platforms, setup and workflows require a
 corresponding doc review. Update affected concepts in the same change, plus
-index descriptions/cross-links, this bundle's [log](log.md), public README entry
+index descriptions/cross-links, public README entry
 points and `quick_blue/CHANGELOG.md` as applicable. In the handoff list docs
 changed, or explain concretely why none were affected; do not defer maintenance
 to a future documentation pass.
@@ -43,16 +43,16 @@ commit `62432a095456147ee71e70ac6e4dc0d2dea3ac30`:
   Supply concise `title`, `description`, tags and real source resources.
 - `index.md` and `log.md` are reserved at every level, never concepts. Only the
   root index has frontmatter, and it carries only `okf_version: "0.2"`.
-- Index entries enumerate concepts with descriptions. Log date headings use
-  `YYYY-MM-DD`, newest first, without frontmatter.
+- Index entries enumerate concepts with descriptions. A separate update log is
+  optional and is not maintained in this repository.
 - Relative concept links are intentionally used: valid OKF, navigable directly
   on GitHub, and suitable for a site under a project URL prefix. Do not confuse
   bundle-relative `/...` with a repository-root or website-root path.
 - `sources[].resource` entries use `../...` repository-relative artifacts; update
   them when source files move. Claim footnotes use their source IDs.
-- `generated.by` records producer/model, and `generated.at` has an explicit UTC
-  offset. Update it after meaningful edits. Add `verified` only after an actual
-  content check and identify its scope; a structural lint is not hardware review.
+- Generation metadata is optional and omitted from this bundle. Add `verified`
+  only after an actual content check and identify its scope; a structural lint
+  is not hardware review.
   Do not manufacture human sign-offs, usage counts or test attestations.
 
 ## Validation commands
@@ -63,6 +63,7 @@ From repository root:
 python3 -m venv .dart_tool/docs-venv
 .dart_tool/docs-venv/bin/pip install -r scripts/requirements-docs.txt
 .dart_tool/docs-venv/bin/python scripts/check-okf.py
+.dart_tool/docs-venv/bin/python -m unittest discover -s scripts -p 'test_check_okf.py'
 .dart_tool/docs-venv/bin/zensical build --clean
 .dart_tool/docs-venv/bin/python scripts/check-docs-site.py
 git diff --check

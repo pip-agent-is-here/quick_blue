@@ -3,7 +3,7 @@ type: "Reference"
 title: "Discover, write and subscribe"
 description: "Use valid GATT snapshots, explicit write framing and subscription-owned notifications."
 tags: ["gatt", "notifications", "writes"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_gatt.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_gatt_test.dart"}]
 ---
 

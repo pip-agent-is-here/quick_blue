@@ -3,7 +3,7 @@ type: "Reference"
 title: "Android companion association"
 description: "Keep companion UI separate from BLE connections and check OS support."
 tags: ["android", "companion"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue/lib/src/quick_blue.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/models.dart"}, {"id": "source3", "resource": "../quick_blue/test/quick_blue_android_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/QuickBluePlugin.kt"}]
 ---
 

@@ -3,7 +3,7 @@ type: "Reference"
 title: "Darwin restoration and accessory setup"
 description: "Choose a restoration-first or AccessorySetupKit-first startup flow."
 tags: ["darwin", "ios", "macos", "restoration", "accessory-setup"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+
 sources: [{"id": "source1", "resource": "../quick_blue_darwin/darwin/quick_blue_darwin/Sources/quick_blue_darwin/QuickBlueDarwinPlugin.swift"}, {"id": "source2", "resource": "../quick_blue_darwin/test/quick_blue_darwin_test.dart"}, {"id": "source3", "resource": "../quick_blue/README.md"}]
 ---
 
