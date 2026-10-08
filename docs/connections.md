@@ -3,7 +3,7 @@ type: "Reference"
 title: "Connection lifetimes and retries"
 description: "Choose one-shot or subscription-owned connections and handle overlapping operations."
 tags: ["connections", "lifecycle"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/managed_connection_lifecycle.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}]
 ---
 
@@ -12,14 +12,27 @@ sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/sr
 ## One-shot ownership
 
 `device.connect()` waits for a connected event; `disconnect()` detaches this
-client. Timeouts belong to the caller. After a connect timeout, disconnect before
-retrying; a timeout alone does not stop native work.
+client. Device connect/disconnect, discovery and MTU methods accept caller-local
+`timeout` and `cancellationToken` options. Neither stops native work or releases
+ownership. Disconnect when abandoning a timed-out connection; an immediate retry
+instead joins outstanding work.
+
+Dart fragment with a BluetoothDevice `device`:
+
+```dart
+await device.connect(timeout: const Duration(seconds: 15));
+```
+
+`QuickBlueCancellationToken` is one-shot. Cancellation reports `cancelled` with
+`failureReason: QuickBlueFailureReason.callerCancelled`; deadlines throw
+`TimeoutException`. Without options waits are unbounded. MTU work with no callback
+remains outstanding until platform completion or engine disposal.
 
 | Overlap for the same device | Result |
 | --- | --- |
 | Disconnect during connect | Supersedes connect; old future gets `cancelled` |
 | Connect during pending disconnect | Supersedes disconnect; old future gets `cancelled` |
-| Same-kind pending operations | `invalidState` |
+| Same-kind pending connect/disconnect | Callers share outstanding work with independent deadlines |
 | Different devices | May connect concurrently |
 
 Service discoveries coalesce; disconnect cancels pending discovery. Android

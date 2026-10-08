@@ -3,7 +3,7 @@ type: "Reference"
 title: "Known boundaries and pitfalls"
 description: "Distinguish implemented support from runtime readiness and hardware evidence."
 tags: ["limitations", "platforms"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
 sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linux.dart"}, {"id": "source2", "resource": "../quick_blue_windows/lib/src/quick_blue_windows.dart"}, {"id": "source3", "resource": "../quick_blue_darwin/test/quick_blue_darwin_test.dart"}, {"id": "source4", "resource": "../quick_blue/example/integration_test/android_multi_engine_test.dart"}, {"id": "source5", "resource": "../quick_blue/example/integration_test/ios_multi_engine_test.dart"}]
 ---
 
@@ -28,7 +28,8 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
   implementations have unit/native coverage, not equivalent runtime suites.
 - AccessorySetupKit and Android companion association have Dart host-API mapping
   tests; those do not demonstrate the real system pickers on hardware.
-- Linux scan-option forwarding has no dedicated unit test for every native knob.
+- Linux scan-option forwarding has mocked filter/default tests; those do not
+  verify adapter behavior for every native knob.
 - Darwin type checking on Linux uses stubs and cannot verify platform runtime
   callbacks or background relaunch.
 

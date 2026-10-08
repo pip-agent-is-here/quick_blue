@@ -39,7 +39,6 @@
   requirement in both agent and contribution instructions to read, update and
   verify the bundle as part of ordinary repository changes.
 
-
 - Add subscription-owned `maintainConnection` with bounded exponential
   backoff, retry exhaustion errors, and explicit cancellation/disconnect
   teardown across all platforms.
