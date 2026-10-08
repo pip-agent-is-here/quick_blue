@@ -17,7 +17,7 @@ usage, platform setup, and development documentation.
 | Connect / disconnect | Supported, with one GATT session shared across Flutter engines. |
 | Discovery, read, write, notifications | Supported. |
 | MTU | Reported as `readNegotiated`: `requestMtu` returns the negotiated session value rather than requesting a specific MTU. |
-| Bonding | Unsupported (`capabilities().supportsBonding` is false). |
+| Bonding | Unsupported (`capabilities().supportsPairing` is false). |
 | L2CAP sockets | Unsupported. |
 | Companion association | Unsupported. |
 

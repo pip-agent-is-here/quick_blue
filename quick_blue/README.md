@@ -7,6 +7,10 @@ Android, iOS, macOS, Windows, and Linux.
 - [Changelog](https://github.com/prefanatic/quick_blue/blob/master/quick_blue/CHANGELOG.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
+The [OKF knowledge bundle](../docs/index.md) is the canonical detailed
+repository documentation, with source-linked workflow pages and maintenance
+rules. This package README remains a package-level introduction and usage guide.
+
 > To use the code documented here, install this repository from Git. A hosted
 > `quick_blue` release may not contain the changes in this fork.
 
@@ -181,8 +185,10 @@ sudo systemctl reload dbus-broker   # or: sudo systemctl restart dbus
 Multi-user hosts can grant a shared group instead by replacing the
 `<policy user="...">` element with `<policy group="bluetooth">`.
 
-`QuickBlue.capabilities().supportsL2capSockets` additionally requires the
-distro package that provides `libbluetooth.so.3` (BlueZ runtime libraries).
+Linux reports `supportsL2capSockets: true` without probing native libraries.
+Opening an L2CAP socket requires the distro package providing `libbluetooth.so.3`
+(BlueZ runtime libraries), and fails at use time if that library is absent. See
+the [L2CAP workflow](../docs/l2cap.md).
 
 The [example app](https://github.com/prefanatic/quick_blue/tree/master/quick_blue/example)
 contains working Android, iOS, and macOS configuration.

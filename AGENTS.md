@@ -1,5 +1,28 @@
 # Repository Instructions
 
+## Ongoing knowledge maintenance (people and agents)
+
+Before work, read `docs/index.md`, the relevant OKF concepts, and
+`docs/testing.md`. The plain Markdown OKF bundle in `docs/` is the source of
+truth for detailed repository documentation; the website and READMEs are entry
+points, not independent authorities. Trace claims to cited implementation/tests;
+if docs and code disagree, resolve intended behavior and fix the discrepancy in
+the same change rather than following stale prose.
+
+For every change to behavior, APIs, examples, supported platforms, setup, or
+workflows, update the affected OKF concepts in the same change. Keep source
+references, examples, index descriptions/cross-links, `docs/log.md`, public README
+entry points, and `quick_blue/CHANGELOG.md` current as applicable. Follow
+`docs/maintenance.md` for OKF v0.2 metadata and reserved-file rules. In the handoff,
+list the docs updated or explain concretely why no documentation was affected.
+
+Before marking work ready, run the documentation validation commands in
+`docs/maintenance.md` (`scripts/check-okf.py` and `git diff --check`), verify claims
+against cited code/tests, exercise changed examples, and run the site build when
+configured plus the relevant checks in `docs/testing.md`. Report exact commands,
+results, blockers and unverified claims; structural checks are not hardware proof.
+Documentation maintenance is part of every ordinary change, not a later pass.
+
 ## Project Layout
 
 This repository is a Dart workspace for `quick_blue`, a federated Flutter
@@ -58,7 +81,10 @@ Do not hand-edit generated `messages.g.*` files except to inspect them.
 Choose the narrowest check that proves the change, then broaden when the touched
 surface is shared or platform-specific.
 
-- Docs-only changes: run `git diff --check`.
+- Docs-only changes: run `scripts/check-okf.py` using the documented docs
+  environment and `git diff --check`; verify claims against cited sources,
+  exercise changed examples, and build the Zensical site when configured.
+  See `docs/maintenance.md` for exact commands.
 - Dart API/model changes: format touched Dart files, run `flutter analyze`, and
   run the relevant package tests.
 - Platform-interface changes: test `quick_blue_platform_interface` plus affected

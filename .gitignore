@@ -22,3 +22,7 @@ pubspec.lock
 local.properties
 **/.cxx/
 .worktrees/
+
+# Generated documentation site and Zensical cache
+/site/
+/.cache/
