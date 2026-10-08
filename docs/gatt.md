@@ -3,7 +3,7 @@ type: "Reference"
 title: "Discover, write and subscribe"
 description: "Use valid GATT snapshots, explicit write framing and subscription-owned notifications."
 tags: ["gatt", "notifications", "writes"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_gatt.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_gatt_test.dart"}]
 ---
 
@@ -59,6 +59,15 @@ does not add reassembly metadata, and cannot infer peripheral framing.
 Without-response completion is not a peripheral acknowledgement or universal
 backpressure. When supported, negotiated MTU minus 3 is a common ATT payload
 upper bound, not a recommended application frame size.
+
+Query `await characteristic.maximumWriteValueLength(mode)` after connecting
+and again after reconnecting. Darwin returns CoreBluetooth's per-mode maximum;
+Android, Linux and Windows return `null` (unknown), not an MTU-derived guess.
+Darwin rejects oversized writes and fails fast with `invalidState` when its
+without-response buffer is full. The caller owns any retry budget; awaiting a
+previous handoff is not proof that buffer space is available. See the
+[repository write/backpressure reference](https://github.com/prefanatic/quick_blue#write-payload-limits-and-backpressure)
+for platform-specific completion boundaries.
 
 ## Database changes invalidate snapshots
 

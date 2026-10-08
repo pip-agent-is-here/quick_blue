@@ -3,7 +3,7 @@ type: "Reference"
 title: "Scan results and filters"
 description: "Own scanning through subscriptions and select portable or native scan controls."
 tags: ["scan", "filters"]
-generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:49:31+00:00"}
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/scan_lifecycle.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/models.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/quick_blue_platform_scan_test.dart"}, {"id": "source4", "resource": "../quick_blue_linux/lib/quick_blue_linux.dart"}]
 ---
 
@@ -49,11 +49,12 @@ is distinct from filtering the advertised service UUID list.
 - `ScanOptions` exposes `android`, `darwin`, `linux`, and `windows` option objects.
   Native knobs include Android PHY, Darwin solicited services, Linux pathloss,
   and Windows signal-strength timing. Omitted common values preserve defaults.
-- Linux option forwarding exists in code but has no dedicated unit test; do not
-  describe every native knob as hardware-verified.[^source4]
+- Linux option forwarding has dedicated filter/default unit tests in
+  `quick_blue_linux/test/scan_session_test.dart`; mocked forwarding is not
+  hardware verification.[^source4]
 
 If scanning is empty, check permissions, power, advertisements, and overly narrow
 filters. [Testing](testing.md) includes an advertisement-only profile.
 
 [^source3]: Shared scan lifecycle tests.
-[^source4]: Linux scan option forwarding implementation.
+[^source4]: Linux facade delegating to `lib/src/scan_session.dart`.

@@ -2,6 +2,8 @@
 
 ## 2026-10-08
 
+- **Integration review**: Reconciled the bundle with current master: caller-local deadlines/cancellation, shared pending operations, native write limits and Linux scan-option unit coverage. Preserved upstream release-download guidance.
+
 - **Site**: Added Zensical navigation matching this index, searchable light/dark rendering and code-copy controls. Added clean PR builds and upstream-only GitHub Pages deployment; publication still requires repository Pages settings and permissions.
 
 - **Creation**: Established the OKF v0.2 [knowledge bundle](index.md), using the pinned specification recorded in [maintenance](maintenance.md).
