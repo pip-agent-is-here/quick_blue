@@ -30,6 +30,16 @@
   every platform, reject oversized Darwin writes, and fail fast when its
   write-without-response buffer is full.
 
+- Add a searchable Zensical site built directly from the OKF Markdown bundle,
+  with grouped navigation, light/dark themes, code-copy controls and a GitHub
+  Pages workflow that validates pull requests before upstream-only deployment.
+
+- Add a source-linked OKF v0.2 knowledge bundle covering setup, device workflows,
+  platform capabilities, L2CAP, diagnostics and verification, plus an ongoing
+  requirement in both agent and contribution instructions to read, update and
+  verify the bundle as part of ordinary repository changes.
+
+
 - Add subscription-owned `maintainConnection` with bounded exponential
   backoff, retry exhaustion errors, and explicit cancellation/disconnect
   teardown across all platforms.

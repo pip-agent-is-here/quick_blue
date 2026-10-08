@@ -1,0 +1,72 @@
+[project]
+site_name = "Quick Blue"
+site_description = "Practical Bluetooth LE workflows for Flutter, with explicit platform boundaries."
+site_url = "https://prefanatic.github.io/quick_blue/"
+repo_url = "https://github.com/prefanatic/quick_blue"
+repo_name = "prefanatic/quick_blue"
+edit_uri = "edit/master/docs/"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { "Home" = "index.md" },
+  { "Start here" = [
+    { "Overview" = "overview.md" },
+    { "Install from Git" = "install.md" },
+    { "Platform setup" = "platform-setup.md" },
+    { "Quickstart" = "quickstart.md" },
+  ] },
+  { "Device workflows" = [
+    { "Scanning" = "scanning.md" },
+    { "Connections and retries" = "connections.md" },
+    { "GATT operations" = "gatt.md" },
+    { "Multi-engine ownership" = "multi-engine.md" },
+    { "Pairing and security" = "pairing.md" },
+    { "L2CAP sockets" = "l2cap.md" },
+  ] },
+  { "Platform and diagnostics reference" = [
+    { "Capability matrix" = "capabilities.md" },
+    { "Android companion association" = "android.md" },
+    { "Darwin restoration and accessories" = "darwin.md" },
+    { "Observability" = "observability.md" },
+    { "Boundaries and pitfalls" = "limitations.md" },
+  ] },
+  { "Repository work" = [
+    { "Example app and test profiles" = "example-app.md" },
+    { "Integration-test options" = "example-options.md" },
+    { "Verification" = "testing.md" },
+    { "Documentation maintenance" = "maintenance.md" },
+    { "Update log" = "log.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.footer",
+  "search.highlight",
+  "content.code.copy",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "teal"
+accent = "cyan"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "teal"
+accent = "cyan"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+footnotes = {}
+attr_list = {}
+pymdownx.highlight = { anchor_linenums = true }
+pymdownx.superfences = {}
+pymdownx.inlinehilite = {}

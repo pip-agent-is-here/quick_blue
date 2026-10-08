@@ -1,0 +1,3 @@
+# Shared local/CI documentation toolchain. Upgrade Zensical with a clean build.
+zensical==0.0.68
+PyYAML>=6.0.2,<7

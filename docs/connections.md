@@ -1,0 +1,61 @@
+---
+type: "Reference"
+title: "Connection lifetimes and retries"
+description: "Choose one-shot or subscription-owned connections and handle overlapping operations."
+tags: ["connections", "lifecycle"]
+generated: {"by": "builder/gpt-6.1-sol", "at": "2026-10-08T14:25:41+00:00"}
+sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/managed_connection_lifecycle.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}]
+---
+
+# Connection lifetimes and retries
+
+## One-shot ownership
+
+`device.connect()` waits for a connected event; `disconnect()` detaches this
+client. Timeouts belong to the caller. After a connect timeout, disconnect before
+retrying; a timeout alone does not stop native work.
+
+| Overlap for the same device | Result |
+| --- | --- |
+| Disconnect during connect | Supersedes connect; old future gets `cancelled` |
+| Connect during pending disconnect | Supersedes disconnect; old future gets `cancelled` |
+| Same-kind pending operations | `invalidState` |
+| Different devices | May connect concurrently |
+
+Service discoveries coalesce; disconnect cancels pending discovery. Android
+additionally bounds final-client teardown and ignores retired-GATT callbacks;
+this disconnect reconciliation guarantee is Android-specific.[^source4]
+
+## Managed reconnection
+
+Use this for a feature that should recover after an established link drops.
+Dart fragment in an async scope; `device` is a BluetoothDevice:
+
+```dart
+final subscription = device.maintainConnection(
+  policy: BluetoothReconnectionPolicy(
+    maxAttempts: 5,
+    initialDelay: const Duration(seconds: 1),
+    maxDelay: const Duration(seconds: 20),
+    backoffMultiplier: 2,
+  ),
+).listen(
+  (change) => print(change.state),
+  onError: (Object error) => print('connection ended: $error'),
+);
+// Cancel when the feature stops, not immediately after subscribing.
+await subscription.cancel();
+```
+
+- Listening performs one initial attempt; initial failure ends the stream without
+  entering the reconnection policy.
+- After link loss, delays grow up to `maxDelay`. `maxAttempts` resets after each
+  successful reconnect; `null` means retry until stopped.
+- Exhaustion emits the final error and closes the stream.
+- Cancellation or `device.disconnect()` stops retries and detaches this client.
+- Only one managed connection owns a device per engine. Do not mix it with
+  manual `connect()` calls for that device.
+
+For cross-engine handoff, read [multi-engine ownership](multi-engine.md).
+
+[^source4]: Android GATT broker disconnect reconciliation.

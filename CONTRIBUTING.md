@@ -5,6 +5,29 @@ the package boundaries: shared APIs and models belong in
 `quick_blue_platform_interface`, while platform behavior belongs in the owning
 platform package.
 
+## Ongoing knowledge maintenance (people and agents)
+
+Before work, read `docs/index.md`, the relevant OKF concepts, and
+`docs/testing.md`. The plain Markdown OKF bundle in `docs/` is the source of
+truth for detailed repository documentation; the website and READMEs are entry
+points, not independent authorities. Trace claims to cited implementation/tests;
+if docs and code disagree, resolve intended behavior and fix the discrepancy in
+the same change rather than following stale prose.
+
+For every change to behavior, APIs, examples, supported platforms, setup, or
+workflows, update the affected OKF concepts in the same change. Keep source
+references, examples, index descriptions/cross-links, `docs/log.md`, public README
+entry points, and `quick_blue/CHANGELOG.md` current as applicable. Follow
+`docs/maintenance.md` for OKF v0.2 metadata and reserved-file rules. In the handoff,
+list the docs updated or explain concretely why no documentation was affected.
+
+Before marking work ready, run the documentation validation commands in
+`docs/maintenance.md` (`scripts/check-okf.py` and `git diff --check`), verify claims
+against cited code/tests, exercise changed examples, and run the site build when
+configured plus the relevant checks in `docs/testing.md`. Report exact commands,
+results, blockers and unverified claims; structural checks are not hardware proof.
+Documentation maintenance is part of every ordinary change, not a later pass.
+
 ## Set up and analyze
 
 Run dependency setup from the repository root:
@@ -49,8 +72,8 @@ The smoke test requires Bluetooth permission, powered-on Bluetooth hardware,
 and nearby advertisements. It includes service discovery and read coverage;
 writes are opt-in because there is no universally safe writable
 characteristic. See
-[`quick_blue/example/README.md`](quick_blue/example/README.md) for device
-profiles and all supported Dart defines.
+[the example workflows](docs/example-app.md) for device profiles and
+[the test-input reference](docs/example-options.md) for all supported Dart defines.
 
 The example also includes focused UI, multi-engine, and performance tests:
 

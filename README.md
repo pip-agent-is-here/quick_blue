@@ -3,7 +3,7 @@
 `quick_blue` is a federated Flutter plugin for Bluetooth Low Energy (BLE) on
 Android, iOS, macOS, Windows, and Linux.
 
-Connection ownership is shared safely across Flutter engines, and bounded
+Connection ownership is shared safely across Flutter engines. On Android, bounded
 disconnect reconciliation keeps missing native callbacks from blocking later
 reconnects. Remote GATT database changes are surfaced across supported
 platforms so applications can invalidate stale service snapshots and
@@ -41,7 +41,9 @@ the application. Writes with response await the platform's acknowledged-write
 result. `writeInChunks` remains opt-in with an explicit `chunkSize`; it stops on
 the first error and adds no framing, automatic reassembly, or application ACKs.
 
-- [Install, platform setup, and usage](quick_blue/README.md)
+- [Knowledge bundle: setup, usage, platforms, and verification](docs/index.md)
+- [Install from Git](docs/install.md)
+- [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Contributing and verification](CONTRIBUTING.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
@@ -66,7 +68,7 @@ README. The Windows x64 ZIP contains the app bundle; extract it and launch
 `quick_blue_example.exe`.
 
 > To use the code in this repository, follow the
-> [Git installation instructions](quick_blue/README.md#install). A hosted
+> [Git installation instructions](docs/install.md). A hosted
 > `quick_blue` release may not contain the changes in this fork.
 
 ## Workspace layout
@@ -78,9 +80,15 @@ README. The Windows x64 ZIP contains the app bundle; extract it and launch
 - `quick_blue_platform_interface/`: shared APIs, models, and tests
 - `quick_blue/example/`: BLE explorer example app and hardware smoke tests
 
-See the [package README](quick_blue/README.md) for Git installation,
-requirements, permissions, a quick start, API examples, platform limitations,
-and multi-engine behavior.
+The [plain Markdown OKF bundle](docs/index.md) is the canonical detailed
+documentation for requirements, permissions, APIs, platform limitations, and
+multi-engine behavior. It is readable without a website or special tooling.
+
+The same files power a searchable Zensical site with light/dark themes. See
+[documentation maintenance](docs/maintenance.md#preview-and-publish-the-site)
+for local preview and GitHub Pages publication requirements. The configured
+target is `https://prefanatic.github.io/quick_blue/`; configuration alone does
+not mean the site has been published.
 
 ## Caller deadlines and cancellation
 
