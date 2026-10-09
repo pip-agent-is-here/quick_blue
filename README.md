@@ -92,6 +92,11 @@ for local preview and GitHub Pages publication requirements. The configured
 target is `https://prefanatic.github.io/quick_blue/`; configuration alone does
 not mean the site has been published.
 
+The [maintenance-tool regression suite](docs/testing.md#maintenance-tool-regressions)
+runs in CI under normal and optimized Python. Hermetic fixtures test validator
+success/failure behavior, not semantic documentation correctness, deployment or
+native Bluetooth behavior.
+
 ## Caller deadlines and cancellation
 
 Device `connect`, `disconnect`, `discoverServices`, `discoverGatt`, and
