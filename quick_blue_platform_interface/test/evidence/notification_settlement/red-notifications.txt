@@ -14,19 +14,19 @@ Try `flutter pub outdated` for more information.
 00:02 +0 -1: terminal notification setup failure closes without consumer cancellation (delayed: false) [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:02 +0 -1: terminal notification setup failure closes without consumer cancellation (delayed: true)
 00:04 +0 -2: terminal notification setup failure closes without consumer cancellation (delayed: true) [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:04 +0 -2: cancelled pending notification setup settles its claim (success: true)
 00:04 +1 -2: cancelled pending notification setup settles its claim (success: false)
 00:04 +2 -2: conflicting notification setup closes without releasing the owner
 00:06 +2 -3: conflicting notification setup closes without releasing the owner [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:06 +2 -3: BluetoothCharacteristic notifications enable and disable notify
 00:06 +3 -3: BluetoothCharacteristic notifications emits notify setup errors
 00:06 +4 -3: BluetoothCharacteristic notifications recover security setup errors
