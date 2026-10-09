@@ -226,19 +226,19 @@ Try `flutter pub outdated` for more information.
 00:07 +208 -1: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: terminal notification setup failure closes without consumer cancellation (delayed: false) [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:07 +208 -1: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: terminal notification setup failure closes without consumer cancellation (delayed: true)
 00:09 +208 -2: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: terminal notification setup failure closes without consumer cancellation (delayed: true) [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:09 +208 -2: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: cancelled pending notification setup settles its claim (success: true)
 00:09 +209 -2: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: cancelled pending notification setup settles its claim (success: false)
 00:09 +210 -2: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: conflicting notification setup closes without releasing the owner
 00:11 +210 -3: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: conflicting notification setup closes without releasing the owner [E]
   TimeoutException after 0:00:02.000000: Future not completed
   dart:async  _startMicrotaskLoop
-  
+
 00:11 +210 -3: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: BluetoothCharacteristic notifications enable and disable notify
 00:11 +211 -3: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: BluetoothCharacteristic notifications emits notify setup errors
 00:11 +212 -3: /home/hermes/quick_blue/.worktrees/t_c2987149/quick_blue_platform_interface/test/bluetooth_notifications_test.dart: BluetoothCharacteristic notifications recover security setup errors
