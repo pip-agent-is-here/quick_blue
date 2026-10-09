@@ -37,6 +37,13 @@ class LifecyclePlatform extends FakeQuickBluePlatform {
   Object? disconnectError;
   bool emitConnect = true;
   bool emitDisconnect = true;
+  Completer<void>? stopScanGate;
+
+  @override
+  Future<void> stopScan() async {
+    calls.add('stopScan');
+    await stopScanGate?.future;
+  }
 
   @override
   Future<void> dispose() async {
@@ -128,6 +135,38 @@ void main() {
     await controller.shutdown();
     platform.connectGates['a']!.complete();
     await drain(tester);
+  });
+
+  testWidgets('total connect deadline also bounds stalled scan preparation', (
+    tester,
+  ) async {
+    initialize();
+    final controller = BleExplorerController(
+      connectTimeout: const Duration(seconds: 5),
+    );
+    await drain(tester);
+    await controller.selectDevice('a');
+    await controller.startScan();
+    await drain(tester);
+    platform.stopScanGate = Completer<void>();
+    var done = false;
+    final pending = controller.connectSelected().then((_) => done = true);
+    await drain(tester);
+    await tester.pump(const Duration(milliseconds: 4999));
+    await drain(tester);
+    expect(done, isFalse);
+    await tester.pump(const Duration(milliseconds: 1));
+    await drain(tester);
+    expect(done, isTrue);
+    expect(controller.connecting, isFalse);
+    expect(platform.calls, isNot(contains('connect a')));
+    platform.stopScanGate!.complete();
+    await drain(tester);
+    await pending;
+    expect(platform.calls, isNot(contains('connect a')));
+    controller.dispose();
+    await drain(tester);
+    await controller.shutdown();
   });
 
   testWidgets('LC-02 raw completion does not reset total deadline', (

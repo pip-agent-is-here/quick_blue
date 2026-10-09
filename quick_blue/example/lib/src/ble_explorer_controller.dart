@@ -300,6 +300,7 @@ class BleExplorerController extends ChangeNotifier {
       return;
     }
     final attempt = ++_connectionAttempt;
+    final cancellation = QuickBlueCancellationToken();
 
     _mutate(() {
       connecting = true;
@@ -309,14 +310,13 @@ class BleExplorerController extends ChangeNotifier {
     });
 
     try {
-      await stopScan();
-      await _releases[deviceId];
-      if (!_isCurrentConnectionAttempt(deviceId, attempt)) {
-        return;
-      }
-      _ownedDevices.add(deviceId);
-      _acceptConnectionEvents = true;
-      await QuickBlue.device(deviceId).connect(timeout: connectTimeout);
+      await _connectDevice(deviceId, attempt, cancellation).timeout(
+        connectTimeout,
+        onTimeout: () {
+          cancellation.cancel();
+          throw TimeoutException('Connect to $deviceId', connectTimeout);
+        },
+      );
       if (_isCurrentConnectionAttempt(deviceId, attempt)) {
         _mutate(() {
           connecting = false;
@@ -378,6 +378,25 @@ class BleExplorerController extends ChangeNotifier {
     } finally {
       _disconnecting = false;
     }
+  }
+
+  Future<void> _connectDevice(
+    String deviceId,
+    int attempt,
+    QuickBlueCancellationToken cancellation,
+  ) async {
+    await stopScan();
+    await _releases[deviceId];
+    if (cancellation.isCancelled ||
+        !_isCurrentConnectionAttempt(deviceId, attempt)) {
+      return;
+    }
+    _ownedDevices.add(deviceId);
+    _acceptConnectionEvents = true;
+    // The outer deadline includes preparation plus the public terminal wait.
+    // Cancellation removes this caller's waiter; explicit release aborts our
+    // ownership separately rather than assuming Future.timeout cancels work.
+    await QuickBlue.device(deviceId).connect(cancellationToken: cancellation);
   }
 
   Future<void> discoverServices() async {

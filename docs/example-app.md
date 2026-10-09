@@ -16,10 +16,10 @@ reference, not a requirement to copy its UI into your app.
 
 ## Explorer connection ownership
 
-The controller uses public `BluetoothDevice.connect(timeout: ...)` and
+The controller uses public `BluetoothDevice.connect(cancellationToken: ...)` and
 `disconnect(timeout: ...)`, not raw platform calls or an extra terminal-event
-waiter. The connect deadline covers both the raw operation and its state event
-(15 seconds by default). On timeout, the UI stops connecting and explicitly
+waiter. One connect deadline covers preparation, the raw operation and its state
+event (15 seconds by default). On timeout, the UI stops connecting and explicitly
 requests client-local disconnect, allowing up to 3 seconds more for abandonment.
 Selection switching and explicit disconnect use the same bounded release and
 request detach once per controller-owned connection attempt. A selected but
