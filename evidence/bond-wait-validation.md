@@ -35,7 +35,7 @@ All commands below ran from the repository root unless a subshell says otherwise
   exit 0, 13 passed.
 - `.dart_tool/docs-venv/bin/zensical build --clean`: exit 0, no issues.
 - `.dart_tool/docs-venv/bin/python scripts/check-docs-site.py`: exit 0,
-  20 navigation pages, 1092 local HTML links/anchors, search assets present.
+  20 navigation pages, 1105 local HTML links/anchors, search assets present.
   These four documentation commands were rerun after the pairing example edit;
   validation-docs log retains the final run.
 - `git diff --check`: exit 0.
