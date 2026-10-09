@@ -52,6 +52,17 @@ class BluetoothGatt {
     );
   }
 
+  /// Resolves a characteristic bound to this snapshot's validity.
+  ///
+  /// New read, write and notification submissions fail with `invalidState`
+  /// after a service-database change. Already-submitted IO is not rolled back.
+  /// Rediscover and resolve a fresh bound handle, or use [characteristic] for
+  /// the existing ID-only behavior.
+  BluetoothCharacteristic boundCharacteristic(
+    String characteristic, {
+    String? service,
+  }) => this.characteristic(characteristic, service: service);
+
   /// Resolves metadata for a discovered characteristic.
   ///
   /// Pass [service] when the characteristic UUID appears under multiple
