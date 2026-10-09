@@ -43,6 +43,29 @@ cancellation throws `QuickBlueException` with code `cancelled` and failure reaso
 `callerCancelled`. A pre-cancelled token or negative timeout fails before
 subscribing or querying. Omitted options retain an unbounded wait.
 
+Cancellation fragment in an async function; retain the token for a separate
+UI stop action, which calls `cancellation.cancel()`:
+
+```dart
+final cancellation = QuickBlueCancellationToken();
+try {
+  await device.waitForBondState(
+    BluetoothBondState.bonded,
+    timeout: const Duration(seconds: 30),
+    cancellationToken: cancellation,
+  );
+} on TimeoutException {
+  // The observation deadline expired; OS pairing may still be active.
+} on QuickBlueException catch (error) {
+  if (error.code != QuickBlueErrorCode.cancelled) rethrow;
+  // This caller stopped observing; OS pairing may still be active.
+}
+```
+
+The fragment requires `dart:async` for `TimeoutException` and the
+`package:quick_blue/quick_blue.dart` public API import. Use a new token for
+each subsequent wait after cancellation.
+
 Success, platform errors, timeout and cancellation release the caller's internal
 event subscription, timer and token listener. Concurrent waits are independent:
 stopping one does not stop another (a shared token intentionally cancels all
