@@ -2,6 +2,12 @@
 
 ### Added
 
+- Add hermetic docs-site, release-metadata and Linux consumer-construction
+  regressions to documentation CI under normal and optimized Python. Keep site
+  and consumer validation failures enabled under optimization, and reject release
+  constraint prefix drift and duplicate dependency declarations. Fixture results
+  prove maintenance-tool behavior only, not deployment or native/hardware behavior.
+
 - Publish tagged example-app builds for Android, iOS Simulator, macOS, Linux
   x64, and Windows x64 with per-asset SHA-256 checksums and platform limitation
   guidance.

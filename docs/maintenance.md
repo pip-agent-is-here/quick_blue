@@ -63,9 +63,11 @@ From repository root:
 python3 -m venv .dart_tool/docs-venv
 .dart_tool/docs-venv/bin/pip install -r scripts/requirements-docs.txt
 .dart_tool/docs-venv/bin/python scripts/check-okf.py
-.dart_tool/docs-venv/bin/python -m unittest discover -s scripts -p 'test_check_okf.py'
+.dart_tool/docs-venv/bin/python -m unittest discover -s scripts -p 'test_*.py'
+.dart_tool/docs-venv/bin/python -O -m unittest discover -s scripts -p 'test_*.py'
 .dart_tool/docs-venv/bin/zensical build --clean
 .dart_tool/docs-venv/bin/python scripts/check-docs-site.py
+.dart_tool/docs-venv/bin/python -O scripts/check-docs-site.py
 git diff --check
 ```
 
@@ -89,6 +91,9 @@ not requirements for reading the source files.
 
 The site checker requires exact navigation coverage and verifies generated local
 HTML links and anchors, including the project URL prefix and search assets.
+Its critical failures use explicit exceptions, not optimization-sensitive assertions.
+See [maintenance-tool regressions](testing.md#maintenance-tool-regressions) for
+the hermetic suite and its proof boundaries.
 
 The workflow `.github/workflows/docs.yml` validates OKF and builds on matching
 pull requests and `master` pushes. Deployment runs only in

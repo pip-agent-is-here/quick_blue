@@ -4,7 +4,7 @@ title: "Verify repository changes"
 description: "Select package, native and hardware checks and record precise evidence."
 tags: ["development", "testing", "ci"]
 
-sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}]
+sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}, {"id": "site-tests", "resource": "../scripts/test_check_docs_site.py"}, {"id": "release-tests", "resource": "../scripts/test_publish_packages.py"}, {"id": "consumer-tests", "resource": "../scripts/test_check_linux_consumer.py"}, {"id": "maintenance-ci", "resource": "../.github/workflows/docs.yml"}]
 ---
 
 # Verify repository changes
@@ -26,6 +26,35 @@ Dart bindings. Run `flutter analyze` and `flutter test` in affected packages:
 `quick_blue`, `quick_blue_platform_interface`, `quick_blue_darwin`,
 `quick_blue_linux`, `quick_blue_windows`, and `quick_blue/example`.
 Shared API/model changes require platform-interface and affected facade tests.
+
+## Maintenance-tool regressions
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py'
+python3 -O -m unittest discover -s scripts -p 'test_*.py'
+```
+
+The Documentation workflow runs these tests alongside OKF validation and a clean
+site build. The suite includes 13 OKF tests, 12 built-site tests, four release
+metadata tests and five consumer-construction tests. Site fixtures run the copied
+validator in normal and optimized subprocesses, checking navigation coverage and
+duplicates, rendered pages, anchors, missing targets, absolute/encoded project
+prefix escapes and search assets. Release fixtures check version/constraint drift,
+malformed version values, dependency membership and usage errors before a logging
+Dart stand-in can run. Bash itself has no Python optimization mode.
+
+Consumer fixtures mock command execution and synthesize package graphs/configs;
+they check Git dependency quoting/overrides, isolated roots and dependencies,
+transitive bluez, cache locations and the initially empty cache. They never invoke
+Flutter or Git. Their printed PASS lines are not actual build evidence. Release
+fixtures never publish; no fixture needs network or a VM. Explicit validation
+failures remain enabled under `-O`.
+
+These tests prove only executed maintenance-tool success/failure behavior, not
+semantic documentation correctness, external deployment, package publication or
+native/hardware behavior. Real consumer builds remain a separate check using
+`python3 scripts/check-linux-consumer.py`; see [maintenance](maintenance.md) for
+the real documentation validation chain.
 
 ## Native and generated boundaries
 
