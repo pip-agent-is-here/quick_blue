@@ -22,7 +22,10 @@ native rollback, or hardware-bound validity behavior is established.
 ## Executed checks
 
 Commands below are relative to the isolated repository root unless specified.
-Raw output is tracked beside this file; filenames are prefixed snapshot-bound-.
+Output is tracked beside this file; filenames are prefixed snapshot-bound-.
+Trailing log whitespace was normalized for the diff-check gate; result content
+is unchanged. The baseline-to-final diff-check initially found trailing log
+whitespace, then passed after normalization.
 
 Baseline before edits, at 0596865a:
 
