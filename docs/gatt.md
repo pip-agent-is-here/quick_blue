@@ -139,14 +139,15 @@ Bound handles fail fast instead of going stale quietly. After a
 `gattServiceChangedStream` event, rediscover the database and resolve again:
 
 ```dart
-final refresh = device.gattServiceChangedStream.listen((change) async {
+// Run inside an awaited async workflow; discovery errors reach its caller.
+await for (final change in device.gattServiceChangedStream) {
   final freshGatt = await device.discoverGatt();
   final fresh = freshGatt.boundCharacteristic(
     characteristicId,
     service: serviceId,
   );
   // Replace the application's previous handles with fresh.
-});
+}
 ```
 
 Each `discoverGatt()` result carries its own validity, and bound handles
