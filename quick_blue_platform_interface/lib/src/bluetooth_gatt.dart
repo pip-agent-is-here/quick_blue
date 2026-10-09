@@ -61,7 +61,14 @@ class BluetoothGatt {
   BluetoothCharacteristic boundCharacteristic(
     String characteristic, {
     String? service,
-  }) => this.characteristic(characteristic, service: service);
+  }) {
+    final resolved = _resolveCharacteristic(characteristic, service: service);
+    return _device.snapshotBoundCharacteristic(
+      resolved.service.uuid,
+      resolved.characteristic.uuid,
+      _isValid,
+    );
+  }
 
   /// Resolves metadata for a discovered characteristic.
   ///
