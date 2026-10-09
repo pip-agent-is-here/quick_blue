@@ -10,7 +10,7 @@ Got dependencies in `/home/hermes/quick_blue/.worktrees/t_6523095a`!
 6 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 00:00 +0: loading /home/hermes/quick_blue/.worktrees/t_6523095a/quick_blue/example/integration_test/ble_smoke_test.dart
-Building Linux application...                                   
+Building Linux application...
 ✓ Built build/linux/x64/debug/bundle/quick_blue_example
 00:00 +0: BLE explorer scans, connects, discovers services, reads, optionally writes, and disconnects
 BLE smoke services for [redacted device identifier]: [00001800-0000-1000-8000-00805f9b34fb, 00001801-0000-1000-8000-00805f9b34fb, 0000fe00-0000-1000-8000-00805f9b34fb, 0000ffff-0000-1000-8000-00805f9b34fb]
