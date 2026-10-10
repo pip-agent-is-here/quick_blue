@@ -35,11 +35,13 @@ python3 -O -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 The Documentation workflow runs these tests alongside OKF validation and a clean
-site build. The suite includes 13 OKF tests, 12 built-site tests, four release
+site build. The suite includes 13 OKF tests, 15 built-site tests, four release
 metadata tests and five consumer-construction tests. Site fixtures run the copied
 validator in normal and optimized subprocesses, checking navigation coverage and
 duplicates, rendered pages, anchors, missing targets, absolute/encoded project
-prefix escapes and search assets. Release fixtures check version/constraint drift,
+prefix escapes, resolved dot-segment/encoded/relative traversal, file and directory
+symlink escapes (where supported), valid parent-relative links and search assets.
+Release fixtures check version/constraint drift,
 malformed version values, dependency membership and usage errors before a logging
 Dart stand-in can run. Bash itself has no Python optimization mode.
 

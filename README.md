@@ -93,7 +93,8 @@ target is `https://prefanatic.github.io/quick_blue/`; configuration alone does
 not mean the site has been published.
 
 The [maintenance-tool regression suite](docs/testing.md#maintenance-tool-regressions)
-runs in CI under normal and optimized Python. Hermetic fixtures test validator
+runs in CI under normal and optimized Python, including resolved-site containment
+for traversal and symlink links. Hermetic fixtures test validator
 success/failure behavior, not semantic documentation correctness, deployment or
 native Bluetooth behavior.
 
