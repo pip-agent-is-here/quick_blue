@@ -9,6 +9,52 @@ import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart
 import '../fake_quick_blue_platform.dart';
 import 'explorer_lifecycle_test.dart' show drain;
 
+// Capture the actual UI listener at the injected Dart boundary. Replaying it
+// after cancellation deliberately bypasses normal StreamController delivery;
+// this models queued callbacks, not native Bluetooth callback correlation.
+class CapturedNotificationStream extends Stream<Uint8List> {
+  CapturedNotificationStream({Future<void> Function()? onCancel})
+    : _controller = StreamController<Uint8List>(onCancel: onCancel);
+
+  final StreamController<Uint8List> _controller;
+  void Function(Uint8List)? _data;
+  Function? _error;
+  int replayedData = 0;
+  int replayedErrors = 0;
+
+  bool get hasListener => _controller.hasListener;
+  void add(Uint8List value) => _controller.add(value);
+  void addError(Object error) => _controller.addError(error);
+  Future<void> close() => _controller.close();
+
+  void replayData(Uint8List value) {
+    replayedData++;
+    _data!(value);
+  }
+
+  void replayError(Object error) {
+    replayedErrors++;
+    (_error! as void Function(Object))(error);
+  }
+
+  @override
+  StreamSubscription<Uint8List> listen(
+    void Function(Uint8List)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    _data = onData;
+    _error = onError;
+    return _controller.stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+}
+
 // Inject result futures at the Dart boundary, deliberately independent of the
 // real discovery coordinator's cancellation. This proves UI ownership only,
 // not native callback correlation or physical Bluetooth semantics.
@@ -17,7 +63,7 @@ class EpochPlatform extends FakeQuickBluePlatform {
   Completer<Uint8List>? readGate;
   Completer<void>? writeGate;
   Completer<void>? cancelGate;
-  final notifications = <StreamController<Uint8List>>[];
+  final notifications = <CapturedNotificationStream>[];
   int writes = 0;
   int activeDiscoveries = 0;
   int maxActiveDiscoveries = 0;
@@ -76,11 +122,11 @@ class EpochPlatform extends FakeQuickBluePlatform {
     String c, {
     BleInputProperty bleInputProperty = BleInputProperty.notification,
   }) {
-    final stream = StreamController<Uint8List>(
-      onCancel: () => cancelGate?.future,
+    final stream = CapturedNotificationStream(
+      onCancel: () => cancelGate?.future ?? Future<void>.value(),
     );
     notifications.add(stream);
-    return stream.stream;
+    return stream;
   }
 
   @override
@@ -337,6 +383,10 @@ void main() {
           platform.notifications.last.add(Uint8List.fromList([42]));
           await drain(tester);
           final status = controller.status;
+          final freshService = controller.services.single;
+          final claims = controller.notificationKeys.toSet();
+          final message = controller.message;
+          final freshStream = platform.notifications.last;
           final failure = StateError('retired notification stop');
           if (fail) {
             platform.cancelGate!.completeError(failure);
@@ -344,13 +394,22 @@ void main() {
             platform.cancelGate!.complete();
           }
           platform.cancelGate = null;
-          oldStream.add(Uint8List.fromList([99]));
-          oldStream.addError(StateError('retired notification event'));
+          expect(oldStream.hasListener, isFalse);
+          expect(freshStream.hasListener, isTrue);
+          final eventFailure = StateError('retired notification event');
+          oldStream.replayData(Uint8List.fromList([99]));
+          oldStream.replayError(eventFailure);
           await drain(tester);
           await stopping;
+          expect(oldStream.replayedData, 1);
+          expect(oldStream.replayedErrors, 1);
+          expect(controller.services.single, same(freshService));
+          expect(controller.message, message);
           expect(controller.status, status);
           expect(controller.latestValues.values.single, [42]);
-          expect(controller.notificationKeys, hasLength(1));
+          expect(controller.notificationKeys.toSet(), claims);
+          expect(freshStream.hasListener, isTrue);
+          expect(controller.gattErrors, contains(same(eventFailure)));
           if (fail) expect(controller.gattErrors, contains(same(failure)));
           expect(tester.takeException(), isNull);
         },
