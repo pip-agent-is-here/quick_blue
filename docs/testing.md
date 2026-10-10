@@ -85,10 +85,10 @@ ambiguous native routing, and Linux setup-error coverage does not assert stream
 done settlement. Harness teardown releases owned subscriptions/claims; it does
 not prove a public plugin-wide dispose API.
 
-See the tracked [case matrix](../evidence/adapter-contracts/PLAN.md),
-[wrapper evidence](../evidence/adapter-contracts/wrappers/RESULTS.md),
-[Linux evidence](../evidence/adapter-contracts/linux/RESULTS.md) and
-[Windows unsupported seam](../evidence/adapter-contracts/windows-read-boundary/RESULTS.md).
+See tracked repository files `evidence/adapter-contracts/PLAN.md`,
+`evidence/adapter-contracts/wrappers/RESULTS.md`,
+`evidence/adapter-contracts/linux/RESULTS.md` and
+`evidence/adapter-contracts/windows-read-boundary/RESULTS.md`.
 The harness is verification-only; notification settlement and Darwin L2CAP
 corrections are separately scoped dependencies, not fixes made by these tests.
 Fake messengers and fake BlueZ establish Dart translation/event contracts only:
