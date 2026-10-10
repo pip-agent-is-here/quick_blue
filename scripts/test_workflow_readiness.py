@@ -54,7 +54,9 @@ class SelectionTests(unittest.TestCase):
 
     def test_scripts(self):
         self.assert_selection(['scripts/tool.py'], COMMON)
-        self.assert_selection(['scripts/check-linux-consumer.py'], COMMON | {'Build Linux'})
+        # Requires PR21's expanded docs.yml policy, now merged from master.
+        # Standalone PR22 before that prerequisite selected no Documentation.
+        self.assert_selection(['scripts/check-linux-consumer.py'], COMMON | {'Build Linux'}, docs=True)
 
     def test_dependabot(self):
         self.assert_selection(['.github/dependabot.yml'], COMMON)
