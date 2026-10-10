@@ -93,6 +93,34 @@ class CheckDocsSiteTest(unittest.TestCase):
         self.write("site/index.html", '<a href="missing.html">Broken</a>')
         self.check("index.html: missing link missing.html")
 
+    def test_resolved_path_escapes(self):
+        self.write("outside.html", "Existing outside target")
+        for link in ("/quick_blue/../outside.html", "/quick_blue/%2e%2e/outside.html",
+                     "../outside.html", "%2e%2e/outside.html"):
+            with self.subTest(link=link):
+                self.write("site/index.html", f'<h1 id="home"></h1><a href="{link}">Broken</a>')
+                self.check(f"link escapes site root: {link}")
+
+    def test_symlink_escapes(self):
+        self.write("outside.html", "Existing outside target")
+        self.write("outside/index.html", "Existing outside directory")
+        try:
+            (self.root / "site/escape.html").symlink_to(self.root / "outside.html")
+            (self.root / "site/escape").symlink_to(self.root / "outside", target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f"symlinks unavailable: {error}")
+        for link in ("escape.html", "/quick_blue/escape.html", "escape/",
+                     "/quick_blue/escape/"):
+            with self.subTest(link=link):
+                self.write("site/index.html", f'<h1 id="home"></h1><a href="{link}">Broken</a>')
+                self.check(f"link escapes site root: {link}")
+
+    def test_valid_parent_relative_links(self):
+        for link in ("../#home", "../index.html#home", "/quick_blue/concept/../#home"):
+            with self.subTest(link=link):
+                self.write("site/concept/index.html", f'<h1 id="topic"></h1><a href="{link}">Home</a>')
+                self.check()
+
     def test_missing_search_assets(self):
         (self.root / "site/assets/search.js").unlink()
         self.check("search assets missing")

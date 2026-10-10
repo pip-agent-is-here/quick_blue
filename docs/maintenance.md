@@ -91,6 +91,9 @@ not requirements for reading the source files.
 
 The site checker requires exact navigation coverage and verifies generated local
 HTML links and anchors, including the project URL prefix and search assets.
+After URL decoding and directory-index selection, link targets must resolve inside
+the resolved site root, including through symlinks. Parent-relative links that stay
+inside the site remain valid; external URLs are not fetched.
 Its critical failures use explicit exceptions, not optimization-sensitive assertions.
 See [maintenance-tool regressions](testing.md#maintenance-tool-regressions) for
 the hermetic suite and its proof boundaries.

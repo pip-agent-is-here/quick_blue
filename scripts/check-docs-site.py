@@ -32,7 +32,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     config = tomllib.loads((root / "zensical.toml").read_text())["project"]
     docs = root / config["docs_dir"]
-    site = root / config["site_dir"]
+    site = (root / config["site_dir"]).resolve()
     prefix = urlsplit(config["site_url"]).path
     entries = []
 
@@ -72,6 +72,7 @@ def main():
             if target.is_dir():
                 target /= "index.html"
             target = target.resolve()
+            require(target.is_relative_to(site), f"link escapes site root: {link}")
             require(target.is_file(), f"{path.relative_to(site)}: missing link {link}")
             if url.fragment and target in pages:
                 require(unquote(url.fragment) in pages[target].ids, f"missing anchor: {link}")

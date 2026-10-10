@@ -2,6 +2,8 @@
 
 ### Added
 
+- Reject docs-site links that resolve outside the site root, including decoded
+  traversal and symlink targets, while preserving internal parent-relative links.
 - Add hermetic docs-site, release-metadata and Linux consumer-construction
   regressions to documentation CI under normal and optimized Python. Keep site
   and consumer validation failures enabled under optimization, and reject release
