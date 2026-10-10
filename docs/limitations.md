@@ -26,7 +26,7 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
 
 At production baseline `0596865a0a46e18f7dc6d56561a79f538cf7bcea`,
 the three `characterization:` tests in
-[`gatt_session_test.dart`](../quick_blue_linux/test/gatt_session_test.dart)
+[`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/2cce9eb00644c2a9daa60534791fc94a00fd7f8d/quick_blue_linux/test/gatt_session_test.dart)
 pin observed gaps, not corrected behavior:
 
 | Controlled ordering | Observed fake-BlueZ result |
