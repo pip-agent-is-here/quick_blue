@@ -77,6 +77,31 @@ For switching, stress and benchmark selection, see [example workflows](example-a
 
 ## Windows VM
 
+Console TCP 8006 and RDP TCP/UDP 3389 bind to `127.0.0.1` by default.
+Non-loopback IPv4 `QUICK_BLUE_WINDOWS_BIND_ADDRESS` requires
+`QUICK_BLUE_WINDOWS_ALLOW_REMOTE=1`. This exposes the guest console/RDP;
+use trusted networks and appropriate access controls. IPv6 bind overrides
+are unsupported; port overrides must be numeric.
+
+Inspect actual production argv without Docker, downloads, resets, OEM writes
+or USB discovery:
+
+```sh
+scripts/windows-integration-test.sh --dry-run | tr '\0' '\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p test_windows_launch.py -v
+bash -n scripts/windows-integration-test.sh
+```
+
+Dry-run stdout is NUL-separated argv including `docker` and the image, not a
+shell command to evaluate. Spaces/quotes remain inside arguments; colon-containing
+host paths are unsupported by Docker's `-v` syntax. USB previews require explicit
+bus/device coordinates and do not check nodes or permissions. Tests prove Linux
+argument construction only, not VM boot, reachability, passthrough or guest execution.
+The guest currently reuses a present Flutter executable without comparing cached
+channel metadata against the request. These tests neither validate nor correct
+that Windows-only behavior; changing the request does not guarantee cached SDK
+replacement.
+
 Repository-root recipe: replace these example USB IDs with your adapter IDs.
 
 ```sh
