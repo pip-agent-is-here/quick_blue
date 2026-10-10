@@ -7,7 +7,7 @@ import unittest
 from workflow_policy import ROOT, aggregate, documentation_selected, load, matches, selection
 
 PACKAGES = ('quick_blue', 'quick_blue/example', 'quick_blue_darwin', 'quick_blue_linux', 'quick_blue_platform_interface', 'quick_blue_windows')
-COMMON = {'Changes', 'Format', 'Generated code', 'Publish readiness', 'Docs validation', 'Readiness policy'} | {f'{kind} {p}' for kind in ('Analyze', 'Test') for p in PACKAGES}
+COMMON = {'Changes', 'Minimum toolchain', 'Format', 'Generated code', 'Publish readiness', 'Docs validation', 'Readiness policy'} | {f'{kind} {p}' for kind in ('Analyze', 'Test') for p in PACKAGES}
 NATIVE = {'Darwin type check', 'Build Android', 'Build Linux', 'Build ios', 'Build macos', 'Build windows'}
 ALL = COMMON | NATIVE
 
@@ -64,6 +64,18 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(matches('.github/workflows/ci.yml', '.github/workflows/**'))
         with self.assertRaises(ValueError):
             matches('x', '{x,y}')
+
+    def test_minimum_toolchain(self):
+        job = load('ci.yml')['jobs']['minimum-toolchain']
+        setup = next(s for s in job['steps'] if s.get('uses', '').startswith('subosito/flutter-action@'))
+        self.assertEqual(setup['with']['flutter-version'], '3.44.2')
+        self.assertEqual(setup['with']['cache'], 'false')
+        self.assertIn('runner.temp', job['env']['PUB_CACHE'])
+        run = job['steps'][-1]['run']
+        for command in ('set -euo pipefail', 'flutter pub get', 'flutter pub deps --json', 'flutter analyze', 'flutter test'):
+            self.assertIn(command, run)
+        for package in PACKAGES:
+            self.assertIn(package, run)
 
     def test_workflow_invokes_validator(self):
         runs = '\n'.join(s.get('run', '') for s in load('ci.yml')['jobs']['publish-readiness']['steps'])

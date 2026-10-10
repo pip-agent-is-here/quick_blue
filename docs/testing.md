@@ -4,13 +4,41 @@ title: "Verify repository changes"
 description: "Select package, native and hardware checks and record precise evidence."
 tags: ["development", "testing", "ci"]
 
-sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}]
+sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}, {"id": "linux-dev", "resource": "../quick_blue_linux/pubspec.yaml"}, {"id": "linux-generator", "resource": "../quick_blue_linux/ffigen.yaml"}]
 ---
 
 # Verify repository changes
 
 Run commands from the repository root unless a subshell below changes directory.
-CI pins Flutter `3.47.6`; package minimum versions are not the CI version.
+CI keeps the primary Flutter `3.47.6` pin and separately exercises the declared
+minimum Flutter `3.44.2` / Dart `3.12.2` with fresh resolution, root analysis and
+all six package test suites. The minimum lane uses an isolated pub cache and no
+Flutter action cache; it proves Dart compatibility, not native or BLE behavior.
+
+To reproduce locally, select an isolated Flutter `3.44.2` SDK (do not replace the
+host SDK), then run:
+
+```sh
+export PATH="/absolute/path/to/flutter-3.44.2/bin:$PATH"
+export PUB_CACHE="$PWD/.dart_tool/pub-cache-minimum"
+flutter --version
+flutter pub get
+flutter pub deps --json
+flutter analyze
+for package in quick_blue quick_blue/example quick_blue_darwin quick_blue_linux quick_blue_platform_interface quick_blue_windows; do
+  (cd "$package" && flutter test) || exit
+done
+```
+
+Linux's development-only ffigen pin is `21.0.0`: version `22.0.0` pulls
+`code_assets ^2.0.0` / `hooks ^2.2.0` / `record_use ^1.0.0`, requiring
+`meta ^1.19.0`, while Flutter `3.44.2` pins `meta 1.18.0`. The minimum remains
+unchanged; no runtime dependency or generated binding is changed. On Fedora,
+regenerate with `dart run ffigen --config ffigen.yaml --compiler-opts
+'-I/usr/lib/clang/22/include'` inside `quick_blue_linux` when libclang's bundled
+resource headers are not found automatically. This host-specific include path
+is not a portable default. Dependency resolution is time-dependent because the
+workspace lockfile is ignored; retain the dependency snapshot with test evidence.
 
 ## Fast checks
 
