@@ -80,8 +80,11 @@ The returned socket has a buffered, single-subscription stream: attach one
 listener, handle both typed error events and stream errors, and always close
 the sink. Stream cancellation alone is not native socket closure.
 
-`sink.close()` invokes the existing native close bridge once per socket;
-repeated closes do not resubmit it. Because the public sink is an `EventSink`,
+`sink.close()` invokes the existing native close bridge once per active socket;
+repeated closes do not resubmit it. After a remote closed event, closing the old
+sink is a no-op, including after a replacement socket opens for that device.
+Late write/close bridge replies cannot dispose the replacement session; failures
+after disposal are reported through `FlutterError.reportError`. Because the public sink is an `EventSink`,
 close is not awaitable. Write and close bridge failures are stream errors,
 not peer acknowledgements. `sink.addError` forwards a stream error. Writes
 after close are rejected. A remote closed event ends the stream.
