@@ -45,6 +45,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Install from Git](docs/install.md)
 - [Notification setup and claim settlement](docs/gatt.md#notifications-own-their-teardown) - Terminal setup failures close the stream; pending cancellation waits for setup and releases only an acquired claim.
 - [Reusable raw characteristic value streams](docs/gatt.md#raw-value-streams-are-reusable) - Retain and re-listen without owning native notification setup; injected-event coverage proves Dart routing only.
+- [L2CAP socket lifetimes and Darwin bridge cleanup](docs/l2cap.md)
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Contributing and verification](CONTRIBUTING.md)
