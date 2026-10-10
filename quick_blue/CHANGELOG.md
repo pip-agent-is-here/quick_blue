@@ -21,6 +21,8 @@
 
 ### Added
 
+- Add executable Dart adapter contracts for Android, Darwin, Windows and fake
+  BlueZ/Linux; document event-only Windows reads and the mock-only proof boundary.
 - Add opt-in `BluetoothGatt.boundCharacteristic`, which resolves a
   characteristic handle bound to its GATT snapshot. After a service-database
   change, new read, write and notification submissions through that handle
@@ -28,6 +30,15 @@
   rediscover and resolve a fresh bound handle to continue. Existing ID-only
   handles keep their current behavior, already-submitted IO is not rolled
   back, and disconnect/reconnect snapshot policy is unchanged.
+
+- Reject docs-site links that resolve outside the site root, including decoded
+  traversal and symlink targets, while preserving internal parent-relative links.
+- Add hermetic docs-site, release-metadata and Linux consumer-construction
+  regressions to documentation CI under normal and optimized Python. Keep site
+  and consumer validation failures enabled under optimization, and reject release
+  constraint prefix drift and duplicate dependency declarations. Fixture results
+  prove maintenance-tool behavior only, not deployment or native/hardware behavior.
+
 
 - Publish tagged example-app builds for Android, iOS Simulator, macOS, Linux
   x64, and Windows x64 with per-asset SHA-256 checksums and platform limitation

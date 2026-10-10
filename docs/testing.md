@@ -4,7 +4,7 @@ title: "Verify repository changes"
 description: "Select package, native and hardware checks and record precise evidence."
 tags: ["development", "testing", "ci"]
 
-sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}]
+sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}, {"id": "site-tests", "resource": "../scripts/test_check_docs_site.py"}, {"id": "release-tests", "resource": "../scripts/test_publish_packages.py"}, {"id": "consumer-tests", "resource": "../scripts/test_check_linux_consumer.py"}, {"id": "maintenance-ci", "resource": "../.github/workflows/docs.yml"}]
 ---
 
 # Verify repository changes
@@ -26,6 +26,73 @@ Dart bindings. Run `flutter analyze` and `flutter test` in affected packages:
 `quick_blue`, `quick_blue_platform_interface`, `quick_blue_darwin`,
 `quick_blue_linux`, `quick_blue_windows`, and `quick_blue/example`.
 Shared API/model changes require platform-interface and affected facade tests.
+
+## Maintenance-tool regressions
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py'
+python3 -O -m unittest discover -s scripts -p 'test_*.py'
+```
+
+The Documentation workflow runs these tests alongside OKF validation and a clean
+site build. The suite includes 13 OKF tests, 15 built-site tests, four release
+metadata tests and five consumer-construction tests. Site fixtures run the copied
+validator in normal and optimized subprocesses, checking navigation coverage and
+duplicates, rendered pages, anchors, missing targets, absolute/encoded project
+prefix escapes, resolved dot-segment/encoded/relative traversal, file and directory
+symlink escapes (where supported), valid parent-relative links and search assets.
+Release fixtures check version/constraint drift,
+malformed version values, dependency membership and usage errors before a logging
+Dart stand-in can run. Bash itself has no Python optimization mode.
+
+Consumer fixtures mock command execution and synthesize package graphs/configs;
+they check Git dependency quoting/overrides, isolated roots and dependencies,
+transitive bluez, cache locations and the initially empty cache. They never invoke
+Flutter or Git. Their printed PASS lines are not actual build evidence. Release
+fixtures never publish; no fixture needs network or a VM. Explicit validation
+failures remain enabled under `-O`.
+
+These tests prove only executed maintenance-tool success/failure behavior, not
+semantic documentation correctness, external deployment, package publication or
+native/hardware behavior. Real consumer builds remain a separate check using
+`python3 scripts/check-linux-consumer.py`; see [maintenance](maintenance.md) for
+the real documentation validation chain.
+
+## Dart adapter contracts
+
+Run the checked-in parameterized wrapper harness and Linux fake-dependency
+cases from the repository root:
+
+```sh
+for package in quick_blue quick_blue_darwin quick_blue_windows quick_blue_linux; do
+  (cd "$package" && flutter test test/adapter_contract_test.dart --reporter expanded)
+done
+(cd quick_blue_windows && flutter test ../evidence/adapter-contracts/windows-read-boundary/read_boundary_test.dart --reporter expanded)
+```
+
+The package suites automatically discover 20 Android, 20 Darwin, 20 Windows and
+17 Linux cases. The extra Windows boundary test requires the explicit command
+above. Cases cover read/event ordering, service identity, typed errors,
+notification claim setup/teardown, capability gates, legacy service-less routing
+and snapshot-bound submission. Shared fixtures exist only for matching Dart
+wrapper contracts; Linux uses fake BlueZ/lease dependencies.
+
+Windows exposes a void host read and inherits event-only fallback: an early
+matching notification can satisfy the read, while a wrong-service event cannot,
+even after host success. This is characterization, not direct-result correlation
+proof or a native/schema repair. Linux service-less lookup deliberately rejects
+ambiguous native routing, and Linux setup-error coverage does not assert stream
+done settlement. Harness teardown releases owned subscriptions/claims; it does
+not prove a public plugin-wide dispose API.
+
+See the tracked [case matrix](../evidence/adapter-contracts/PLAN.md),
+[wrapper evidence](../evidence/adapter-contracts/wrappers/RESULTS.md),
+[Linux evidence](../evidence/adapter-contracts/linux/RESULTS.md) and
+[Windows unsupported seam](../evidence/adapter-contracts/windows-read-boundary/RESULTS.md).
+The harness is verification-only; notification settlement and Darwin L2CAP
+corrections are separately scoped dependencies, not fixes made by these tests.
+Fake messengers and fake BlueZ establish Dart translation/event contracts only:
+not real D-Bus, native ordering, Apple/WinRT runtime or BLE hardware behavior.
 
 ## Native and generated boundaries
 

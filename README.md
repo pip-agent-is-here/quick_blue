@@ -52,6 +52,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Contributing and verification](CONTRIBUTING.md)
+- [Executable Dart adapter contracts](docs/testing.md#dart-adapter-contracts) - Fake messenger/BlueZ coverage, not native or hardware certification.
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
 ## Download the example app
@@ -97,6 +98,12 @@ The same files power a searchable Zensical site with light/dark themes. See
 for local preview and GitHub Pages publication requirements. The configured
 target is `https://prefanatic.github.io/quick_blue/`; configuration alone does
 not mean the site has been published.
+
+The [maintenance-tool regression suite](docs/testing.md#maintenance-tool-regressions)
+runs in CI under normal and optimized Python, including resolved-site containment
+for traversal and symlink links. Hermetic fixtures test validator
+success/failure behavior, not semantic documentation correctness, deployment or
+native Bluetooth behavior.
 
 ## Caller deadlines and cancellation
 
