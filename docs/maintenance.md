@@ -9,15 +9,18 @@ sources: [{"id": "source1", "resource": "../AGENTS.md"}, {"id": "source2", "reso
 
 # Maintain the knowledge bundle
 
-## Before ordinary repository work
+## Before repository work
 
-1. Open [the index](index.md), then the concepts relevant to the change and
-   [testing](testing.md). Use this plain Markdown OKF bundle as the canonical
+1. For read-only inquiries, open [the index](index.md) and relevant concepts.
+   Before changes, also read this playbook and [testing](testing.md).
+   Use this plain Markdown OKF bundle as the canonical
    detailed documentation, not the rendered website or an older README copy.
 2. Trace claims to `sources` and implementation/tests. If code contradicts docs,
    establish intended behavior from tests and requirements; fix the discrepancy
    in the same change. Never change code solely to fit stale prose.
-3. Preserve federated boundaries and generated-code rules in root `AGENTS.md`.
+3. Before editing, inspect worktree status; preserve unrelated in-progress work,
+   including active platform BLE changes. Preserve federated boundaries in root
+   `AGENTS.md` and follow [generated-code rules](testing.md#native-and-generated-boundaries).
 
 ## With every change
 
@@ -28,9 +31,16 @@ points and `quick_blue/CHANGELOG.md` as applicable. In the handoff list docs
 changed, or explain concretely why none were affected; do not defer maintenance
 to a future documentation pass.
 
+Follow [evidence storage](testing.md#store-reproducibility-separately-from-raw-execution-records):
+reproducibility belongs in Git; raw execution records belong in durable artifacts.
+
 Keep examples small and either runnable with their imports or explicitly labeled
 fragments/placeholders. Await fallible futures or route failures to an explicit
 handler; do not copy discarded async listener errors into examples.
+
+Before committing, inspect recent commit subjects and use lower-case scoped
+subjects, such as `quick_blue: tighten README docs` or
+`quick_blue,platform_interface: document public APIs`.
 
 ## OKF rules used
 
@@ -117,7 +127,16 @@ the workflow's upstream guard together.
 
 ## Release metadata
 
-All five publishable packages share a version. Keep pubspec versions and federated
-constraints aligned, fold Unreleased notes into a dated version heading in the
-main package changelog, and run `scripts/publish-packages.sh --dry-run`. Publication
-is a separate authorized step, not part of a documentation edit.
+All five publishable packages share a version. In the same change, bump every
+package's `pubspec.yaml` version and align federated constraints: each platform
+package depends on `quick_blue_platform_interface` at that version and the
+app-facing package pins all federated packages. The script enforces these
+version/constraint invariants; it does not validate changelog headings. The separate
+CI `publish-readiness` job checks that the pubspec version has a changelog heading
+and fails with exit 65 when missing. That job and its dry-run are gated by the
+workflow's validation path filter, not run on every prose-only change.
+Fold Unreleased notes into a dated `## [x.y.z]` heading in
+`quick_blue/CHANGELOG.md`, run `scripts/publish-packages.sh --dry-run` (also run by
+CI), and confirm smoke tests for every reachable platform before releasing.
+Real publication uses `scripts/publish-packages.sh --publish` manually and is a
+separate authorized step, not part of a documentation edit.
