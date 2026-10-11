@@ -174,13 +174,8 @@ acquire a reason based on their text.
 
 ## Development
 
-Set up the workspace and run the common checks from the repository root:
-
-```sh
-flutter pub get
-dart format .
-flutter analyze
-```
+Follow [repository verification](docs/testing.md#fast-checks) for root dependency
+setup, touched non-generated Dart formatting, analysis and affected package tests.
 
 Platform changes usually require package tests plus a hardware-backed BLE smoke
 test. See [CONTRIBUTING.md](CONTRIBUTING.md) for package-specific checks,

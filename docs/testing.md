@@ -12,6 +12,16 @@ sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "
 Run commands from the repository root unless a subshell below changes directory.
 CI pins Flutter `3.47.6`; package minimum versions are not the CI version.
 
+## Select checks
+
+Choose the narrowest check that proves the change, then broaden for shared or
+platform-specific surfaces. Prose-only changes use the full
+[documentation validation chain](maintenance.md#validation-commands) and source
+review; they do not require hardware execution. Platform implementation changes
+require affected package tests plus a matching platform build or smoke test when
+available. Use platform builds or the example app for Android, iOS, macOS,
+Windows and Linux behavior that unit tests cannot cover.
+
 ## Fast checks
 
 ```sh
@@ -21,11 +31,13 @@ flutter analyze
 git diff --check
 ```
 
-Format touched Dart files with `dart format`. The CI format gate excludes generated
+Format touched, non-generated Dart files with `dart format`. Do not format generated
+bindings; update them only through the owning generator. The CI format gate excludes generated
 Dart bindings. Run `flutter analyze` and `flutter test` in affected packages:
 `quick_blue`, `quick_blue_platform_interface`, `quick_blue_darwin`,
 `quick_blue_linux`, `quick_blue_windows`, and `quick_blue/example`.
 Shared API/model changes require platform-interface and affected facade tests.
+Example changes require `(cd quick_blue/example && flutter analyze && flutter test)`.
 
 ## Maintenance-tool regressions
 
@@ -67,13 +79,23 @@ the real documentation validation chain.
 | Darwin ownership/restoration helpers | `swift test` inside the corresponding `connection_ownership` / `restoration_summary` directories |
 | Android Kotlin | `(cd quick_blue/example/android && ./gradlew :quick_blue:testDebugUnitTest)` |
 | Windows ownership | Native CMake/CTest target on Windows (CI `build-windows`) |
+| Linux external Git consumers | `python3 scripts/check-linux-consumer.py` (isolated consumers, initially empty Pub caches; requires Flutter Linux tools, Git and Pub network access, not BLE hardware) |
 | Release metadata | `scripts/publish-packages.sh --dry-run`; CI also checks the current-version changelog heading |
 | Documentation | [Maintenance checks](maintenance.md), source review, and site build when configured |
 
 Darwin's Linux type-check harness uses signature-faithful stubs; it does not prove
-CoreBluetooth behavior on hardware. Pigeon sources live in `quick_blue/pigeons`,
-`quick_blue_darwin/pigeons`, and `quick_blue_windows/pigeons`; do not hand-edit
-`messages.g.*` outputs.
+CoreBluetooth behavior on hardware. Pigeon schemas are the source of truth;
+regenerate outputs after schema changes, keep channel/API changes aligned across
+Dart and native bindings, and inspect the resulting `git diff`. Inspection is
+allowed; hand-editing generated `messages.g.*` files is not.
+
+Each source is `pigeons/messages.dart` relative to its owning package:
+
+| Owning package | Generated outputs (package-relative) |
+| --- | --- |
+| `quick_blue` | `lib/src/messages.g.dart`, `android/src/main/kotlin/com/example/quick_blue/Messages.g.kt` |
+| `quick_blue_darwin` | `lib/src/messages.g.dart`, `darwin/quick_blue_darwin/Sources/quick_blue_darwin/Messages.g.swift` |
+| `quick_blue_windows` | `lib/src/messages.g.dart`, `windows/messages.g.h`, `windows/messages.g.cpp` |
 
 ## Hardware BLE smoke
 
@@ -88,9 +110,17 @@ QUICK_BLUE_HIDE_TEST_WINDOW=1 \
   xvfb-run -a flutter test integration_test/ble_smoke_test.dart -d linux
 ```
 
-Supply [test defines](example-options.md) for a known device. An advertisement-only
+Tests need Bluetooth permission, powered-on hardware and nearby advertisements
+or explicit smoke-test defines. Supply [test defines](example-options.md) for a known device. An advertisement-only
 profile does not satisfy GATT verification. Writes are opt-in and require a safe
 peripheral command. Missing Bluetooth on a supported smoke target must fail.
+
+The smoke test skips unsupported platforms and an empty candidate set (even with
+explicit target inputs). With candidates, exhausted flows fail for an explicit
+target (device/name/profile/service expectations or write request), but skip for
+untargeted discovery. See `quick_blue/example/integration_test/ble_smoke_test.dart`
+lines 80–127 and 184–199 for exact target criteria.
+A skip is not verification; inspect executed scenarios, not just the exit code.
 
 Physical-device multi-engine recipes (replace placeholders):
 
@@ -103,7 +133,17 @@ flutter test integration_test/ios_multi_engine_test.dart -d IOS_DEVICE \
   --dart-define=QUICK_BLUE_MULTI_ENGINE_CHARACTERISTIC_UUID='CHARACTERISTIC_UUID'
 ```
 
-For switching, stress and benchmark selection, see [example workflows](example-app.md).
+For the advertisement-only recipe and switching, stress and benchmark
+selection, see [example workflows](example-app.md). Focused UI and benchmark
+recipes from `quick_blue/example` (replace placeholders):
+
+```sh
+flutter test integration_test/ble_ui_switch_test.dart -d macos
+flutter test integration_test/ble_characteristic_benchmark_test.dart -d macos \
+  --dart-define=QUICK_BLUE_BENCHMARK_DEVICE_ID='DEVICE_ID' \
+  --dart-define=QUICK_BLUE_BENCHMARK_NOTIFY_SERVICE_UUID='SERVICE_UUID' \
+  --dart-define=QUICK_BLUE_BENCHMARK_NOTIFY_CHARACTERISTIC_UUID='CHARACTERISTIC_UUID'
+```
 
 ## Windows VM
 
@@ -131,3 +171,18 @@ Record the exact command, revision, host/device, executed scenarios, result and
 any skips. If blocked, state the command attempted, the concrete blocker, and
 what remains unverified. Unit mocks, stubs and CI builds do not replace a hardware
 run. [Limitations](limitations.md) tracks known verification gaps.
+
+### Store reproducibility separately from raw execution records
+
+Keep regression tests, reusable fixtures, reproduction scripts/harnesses and
+concise behavior/proof-boundary documentation in Git. Store raw test/build/analyzer
+logs, red/green transcripts, screenshots, generated reports, evidence archives and
+machine-specific dumps in durable Kanban attachments or CI artifacts, not Git.
+Scratch paths alone are not preservation. Exceptions require justified executable
+test inputs or curated stable baselines, not an unfiltered execution dump.
+
+Before removing existing tracked raw evidence, archive the originals durably,
+read the stored attachment/artifact back and verify its hashes against the originals.
+Keep artifact identifiers and concise provenance in the handoff. Preserve historical
+completion records and useful running work. Storage location never relaxes tests,
+acceptance criteria, hardware verification or publication proof boundaries.
