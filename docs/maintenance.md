@@ -73,7 +73,6 @@ From repository root:
 python3 -m venv .dart_tool/docs-venv
 .dart_tool/docs-venv/bin/pip install -r scripts/requirements-docs.txt
 .dart_tool/docs-venv/bin/python scripts/check-okf.py
-.dart_tool/docs-venv/bin/python -m unittest discover -s scripts -p 'test_check_okf.py'
 .dart_tool/docs-venv/bin/python -m unittest discover -s scripts -p 'test_*.py'
 .dart_tool/docs-venv/bin/python -O -m unittest discover -s scripts -p 'test_*.py'
 .dart_tool/docs-venv/bin/zensical build --clean
