@@ -4,13 +4,23 @@ title: "Verify repository changes"
 description: "Select package, native and hardware checks and record precise evidence."
 tags: ["development", "testing", "ci"]
 
-sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}]
+sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "source2", "resource": "../AGENTS.md"}, {"id": "source3", "resource": "../CONTRIBUTING.md"}, {"id": "source4", "resource": "../scripts/publish-packages.sh"}, {"id": "source5", "resource": "../scripts/windows-integration-test.sh"}, {"id": "site-tests", "resource": "../scripts/test_check_docs_site.py"}, {"id": "release-tests", "resource": "../scripts/test_publish_packages.py"}, {"id": "consumer-tests", "resource": "../scripts/test_check_linux_consumer.py"}, {"id": "maintenance-ci", "resource": "../.github/workflows/docs.yml"}]
 ---
 
 # Verify repository changes
 
 Run commands from the repository root unless a subshell below changes directory.
 CI pins Flutter `3.47.6`; package minimum versions are not the CI version.
+
+## Select checks
+
+Choose the narrowest check that proves the change, then broaden for shared or
+platform-specific surfaces. Prose-only changes use the full
+[documentation validation chain](maintenance.md#validation-commands) and source
+review; they do not require hardware execution. Platform implementation changes
+require affected package tests plus a matching platform build or smoke test when
+available. Use platform builds or the example app for Android, iOS, macOS,
+Windows and Linux behavior that unit tests cannot cover.
 
 ## Fast checks
 
@@ -21,11 +31,44 @@ flutter analyze
 git diff --check
 ```
 
-Format touched Dart files with `dart format`. The CI format gate excludes generated
+Format touched, non-generated Dart files with `dart format`. Do not format generated
+bindings; update them only through the owning generator. The CI format gate excludes generated
 Dart bindings. Run `flutter analyze` and `flutter test` in affected packages:
 `quick_blue`, `quick_blue_platform_interface`, `quick_blue_darwin`,
 `quick_blue_linux`, `quick_blue_windows`, and `quick_blue/example`.
 Shared API/model changes require platform-interface and affected facade tests.
+Example changes require `(cd quick_blue/example && flutter analyze && flutter test)`.
+
+## Maintenance-tool regressions
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py'
+python3 -O -m unittest discover -s scripts -p 'test_*.py'
+```
+
+The Documentation workflow runs these tests alongside OKF validation and a clean
+site build. The suite includes 13 OKF tests, 15 built-site tests, four release
+metadata tests and five consumer-construction tests. Site fixtures run the copied
+validator in normal and optimized subprocesses, checking navigation coverage and
+duplicates, rendered pages, anchors, missing targets, absolute/encoded project
+prefix escapes, resolved dot-segment/encoded/relative traversal, file and directory
+symlink escapes (where supported), valid parent-relative links and search assets.
+Release fixtures check version/constraint drift,
+malformed version values, dependency membership and usage errors before a logging
+Dart stand-in can run. Bash itself has no Python optimization mode.
+
+Consumer fixtures mock command execution and synthesize package graphs/configs;
+they check Git dependency quoting/overrides, isolated roots and dependencies,
+transitive bluez, cache locations and the initially empty cache. They never invoke
+Flutter or Git. Their printed PASS lines are not actual build evidence. Release
+fixtures never publish; no fixture needs network or a VM. Explicit validation
+failures remain enabled under `-O`.
+
+These tests prove only executed maintenance-tool success/failure behavior, not
+semantic documentation correctness, external deployment, package publication or
+native/hardware behavior. Real consumer builds remain a separate check using
+`python3 scripts/check-linux-consumer.py`; see [maintenance](maintenance.md) for
+the real documentation validation chain.
 
 ## Native and generated boundaries
 
@@ -36,14 +79,23 @@ Shared API/model changes require platform-interface and affected facade tests.
 | Darwin ownership/restoration helpers | `swift test` inside the corresponding `connection_ownership` / `restoration_summary` directories |
 | Android Kotlin | `(cd quick_blue/example/android && ./gradlew :quick_blue:testDebugUnitTest)` |
 | Windows ownership | Native CMake/CTest target on Windows (CI `build-windows`) |
-| Release metadata | `scripts/publish-packages.sh --dry-run` and `python3 scripts/check-changelog-coverage.py` |
-| Workflow selection/policy | Docs-venv Python: `-m unittest discover -s scripts -p 'test_workflow_readiness.py' -v` |
+| Linux external Git consumers | `python3 scripts/check-linux-consumer.py` (isolated consumers, initially empty Pub caches; requires Flutter Linux tools, Git and Pub network access, not BLE hardware) |
+| Release metadata | `scripts/publish-packages.sh --dry-run`; CI also checks the current-version changelog heading |
 | Documentation | [Maintenance checks](maintenance.md), source review, and site build when configured |
 
 Darwin's Linux type-check harness uses signature-faithful stubs; it does not prove
-CoreBluetooth behavior on hardware. Pigeon sources live in `quick_blue/pigeons`,
-`quick_blue_darwin/pigeons`, and `quick_blue_windows/pigeons`; do not hand-edit
-`messages.g.*` outputs.
+CoreBluetooth behavior on hardware. Pigeon schemas are the source of truth;
+regenerate outputs after schema changes, keep channel/API changes aligned across
+Dart and native bindings, and inspect the resulting `git diff`. Inspection is
+allowed; hand-editing generated `messages.g.*` files is not.
+
+Each source is `pigeons/messages.dart` relative to its owning package:
+
+| Owning package | Generated outputs (package-relative) |
+| --- | --- |
+| `quick_blue` | `lib/src/messages.g.dart`, `android/src/main/kotlin/com/example/quick_blue/Messages.g.kt` |
+| `quick_blue_darwin` | `lib/src/messages.g.dart`, `darwin/quick_blue_darwin/Sources/quick_blue_darwin/Messages.g.swift` |
+| `quick_blue_windows` | `lib/src/messages.g.dart`, `windows/messages.g.h`, `windows/messages.g.cpp` |
 
 ## Hardware BLE smoke
 
@@ -58,9 +110,17 @@ QUICK_BLUE_HIDE_TEST_WINDOW=1 \
   xvfb-run -a flutter test integration_test/ble_smoke_test.dart -d linux
 ```
 
-Supply [test defines](example-options.md) for a known device. An advertisement-only
+Tests need Bluetooth permission, powered-on hardware and nearby advertisements
+or explicit smoke-test defines. Supply [test defines](example-options.md) for a known device. An advertisement-only
 profile does not satisfy GATT verification. Writes are opt-in and require a safe
 peripheral command. Missing Bluetooth on a supported smoke target must fail.
+
+The smoke test skips unsupported platforms and an empty candidate set (even with
+explicit target inputs). With candidates, exhausted flows fail for an explicit
+target (device/name/profile/service expectations or write request), but skip for
+untargeted discovery. See `quick_blue/example/integration_test/ble_smoke_test.dart`
+lines 80–127 and 184–199 for exact target criteria.
+A skip is not verification; inspect executed scenarios, not just the exit code.
 
 Physical-device multi-engine recipes (replace placeholders):
 
@@ -73,7 +133,17 @@ flutter test integration_test/ios_multi_engine_test.dart -d IOS_DEVICE \
   --dart-define=QUICK_BLUE_MULTI_ENGINE_CHARACTERISTIC_UUID='CHARACTERISTIC_UUID'
 ```
 
-For switching, stress and benchmark selection, see [example workflows](example-app.md).
+For the advertisement-only recipe and switching, stress and benchmark
+selection, see [example workflows](example-app.md). Focused UI and benchmark
+recipes from `quick_blue/example` (replace placeholders):
+
+```sh
+flutter test integration_test/ble_ui_switch_test.dart -d macos
+flutter test integration_test/ble_characteristic_benchmark_test.dart -d macos \
+  --dart-define=QUICK_BLUE_BENCHMARK_DEVICE_ID='DEVICE_ID' \
+  --dart-define=QUICK_BLUE_BENCHMARK_NOTIFY_SERVICE_UUID='SERVICE_UUID' \
+  --dart-define=QUICK_BLUE_BENCHMARK_NOTIFY_CHARACTERISTIC_UUID='CHARACTERISTIC_UUID'
+```
 
 ## Windows VM
 
@@ -118,20 +188,26 @@ rebuilds the VM disk; do not use it for routine reruns.
 ## Report evidence, not assumptions
 
 CI selects readiness checks for `**/CHANGELOG.md` and release pubspec changes.
-Source/configuration changes selected by `validate` also run cheap canonical OKF
-validation and readiness fixtures. Docs-only changes remain owned by the
-Documentation workflow, including its site build.
-
-Fixtures read real workflow filters, conditions and matrices. The local glob
-evaluator supports only the current literal/`*`/`**` subset, fails on unsupported
-patterns, and does not prove exact dorny/GitHub execution semantics. Its aggregate
-policy treats selected failures as FAIL, cancellations or unexpected skips as
-UNRESOLVED (rerun required), and condition-false skips as neutral. Changes-job
-failures cannot produce an all-skip pass. This is a local policy fixture, not an
-aggregate CI job or branch-protection enforcement. Hosted iOS/macOS/Windows
+Documentation validation, maintenance-tool tests and the clean site build belong
+to the Documentation workflow and its explicit path filters. Hosted iOS/macOS/Windows
 builds explicitly disabled by `SKIP_HOSTED_PLATFORM_BUILDS` remain unverified.
 
 Record the exact command, revision, host/device, executed scenarios, result and
 any skips. If blocked, state the command attempted, the concrete blocker, and
 what remains unverified. Unit mocks, stubs and CI builds do not replace a hardware
 run. [Limitations](limitations.md) tracks known verification gaps.
+
+### Store reproducibility separately from raw execution records
+
+Keep regression tests, reusable fixtures, reproduction scripts/harnesses and
+concise behavior/proof-boundary documentation in Git. Store raw test/build/analyzer
+logs, red/green transcripts, screenshots, generated reports, evidence archives and
+machine-specific dumps in durable Kanban attachments or CI artifacts, not Git.
+Scratch paths alone are not preservation. Exceptions require justified executable
+test inputs or curated stable baselines, not an unfiltered execution dump.
+
+Before removing existing tracked raw evidence, archive the originals durably,
+read the stored attachment/artifact back and verify its hashes against the originals.
+Keep artifact identifiers and concise provenance in the handoff. Preserve historical
+completion records and useful running work. Storage location never relaxes tests,
+acceptance criteria, hardware verification or publication proof boundaries.

@@ -6,9 +6,16 @@
   regression coverage; bind console TCP and RDP TCP/UDP to loopback by default
   and require explicit opt-in for non-loopback exposure.
 
-- Validate changelog-only readiness changes and canonical documentation for
-  source changes in CI; add local workflow-selection/policy fixtures and a
-  reusable current-version changelog-heading validator.
+- Select existing CI readiness checks for changelog-only changes; retain the
+  inline current-version heading check and the Documentation workflow's checks.
+- Reject docs-site links that resolve outside the site root, including decoded
+  traversal and symlink targets, while preserving internal parent-relative links.
+- Add hermetic docs-site, release-metadata and Linux consumer-construction
+  regressions to documentation CI under normal and optimized Python. Keep site
+  and consumer validation failures enabled under optimization, and reject release
+  constraint prefix drift and duplicate dependency declarations. Fixture results
+  prove maintenance-tool behavior only, not deployment or native/hardware behavior.
+
 
 - Publish tagged example-app builds for Android, iOS Simulator, macOS, Linux
   x64, and Windows x64 with per-asset SHA-256 checksums and platform limitation

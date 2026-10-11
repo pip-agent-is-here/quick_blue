@@ -29,7 +29,19 @@ packages=(
 )
 
 package_version() {
-  sed -n 's/^version: //p' "$repo_root/$1/pubspec.yaml"
+  local value
+  value="$(sed -n 's/^version: //p' "$repo_root/$1/pubspec.yaml")"
+  if [[ ! "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+    echo "$1 has missing or malformed version: $value" >&2
+    return 65
+  fi
+  printf '%s\n' "$value"
+}
+
+dependency_matches() {
+  local lines
+  lines="$(sed -n "s/^  $2: //p" "$repo_root/$1/pubspec.yaml")"
+  [[ "$lines" == "$expected_constraint" ]]
 }
 
 release_version="$(package_version "${packages[0]}")"
@@ -43,15 +55,13 @@ done
 
 expected_constraint="^$release_version"
 for package in quick_blue_darwin quick_blue_linux quick_blue_windows; do
-  if ! grep -Fq "quick_blue_platform_interface: $expected_constraint" \
-    "$repo_root/$package/pubspec.yaml"; then
+  if ! dependency_matches "$package" quick_blue_platform_interface; then
     echo "$package does not depend on quick_blue_platform_interface $expected_constraint" >&2
     exit 65
   fi
 done
 for package in "${packages[@]:0:4}"; do
-  if ! grep -Fq "$package: $expected_constraint" \
-    "$repo_root/quick_blue/pubspec.yaml"; then
+  if ! dependency_matches quick_blue "$package"; then
     echo "quick_blue does not depend on $package $expected_constraint" >&2
     exit 65
   fi

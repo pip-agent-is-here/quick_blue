@@ -48,7 +48,8 @@ def check_consumer(package, snapshot, revision, fixture):
         "flutter", "create", "--empty", "--no-pub", "--platforms=linux",
         "--project-name=linux_consumer", str(consumer), cwd=fixture, env=env,
     )
-    assert not any(cache.iterdir()), "Consumer cache must be empty before pub get"
+    if any(cache.iterdir()):
+        raise ValueError("Consumer cache must be empty before pub get")
     # Flutter templates can seed a lockfile even with --no-pub. Do not let that
     # or the template's flutter_lints include influence this minimal consumer.
     (consumer / "pubspec.lock").unlink(missing_ok=True)
@@ -79,15 +80,20 @@ def check_consumer(package, snapshot, revision, fixture):
     )
     run("flutter", "pub", "get", cwd=consumer, env=env)
     graph = json.loads((consumer / ".dart_tool" / "package_graph.json").read_text())
-    assert graph["roots"] == ["linux_consumer"], "Must resolve outside the workspace"
+    if graph["roots"] != ["linux_consumer"]:
+        raise ValueError("Must resolve outside the workspace")
     nodes = {node["name"]: node for node in graph["packages"]}
-    assert nodes["linux_consumer"]["dependencies"] == ["flutter", package]
-    assert "bluez" in nodes["quick_blue_linux"]["dependencies"]
-    assert "bluez" in nodes, "bluez must resolve transitively"
+    if nodes["linux_consumer"]["dependencies"] != ["flutter", package]:
+        raise ValueError(f"Consumer dependencies must be flutter and {package}")
+    if "bluez" not in nodes["quick_blue_linux"]["dependencies"]:
+        raise ValueError("quick_blue_linux dependencies must include bluez")
+    if "bluez" not in nodes:
+        raise ValueError("bluez must resolve transitively")
     config = json.loads((consumer / ".dart_tool" / "package_config.json").read_text())
     for node in config["packages"]:
         if node["name"] in PACKAGES or node["name"] == "bluez":
-            assert node["rootUri"].startswith(cache.as_uri() + "/"), node
+            if not node["rootUri"].startswith(cache.as_uri() + "/"):
+                raise ValueError(f"Package must resolve inside fixture cache: {node}")
     run("flutter", "analyze", "--no-pub", cwd=consumer, env=env)
     run("flutter", "build", "linux", "--debug", "--no-pub", cwd=consumer, env=env)
     print(f"PASS: {package} installs and builds with transitive bluez", flush=True)
