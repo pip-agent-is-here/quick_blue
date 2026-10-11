@@ -1,5 +1,11 @@
 # Retained raw characteristic stream: green evidence
 
+Raw execution records referenced by filename below are historical archive members,
+not files shipped in this checkout. Originals were preserved byte-for-byte in a
+verified durable evidence attachment before removal from Git. Retained commands,
+regression tests, fixtures and proof boundaries remain the reproduction route;
+historical counts are not a claim about a fresh run.
+
 Implementation starts from regression commit
 `7329b7a05c7d43e64f845be7fced4a8b6947eb66`, whose original red evidence is
 preserved unchanged in `retained-stream.md` and the adjacent red logs.

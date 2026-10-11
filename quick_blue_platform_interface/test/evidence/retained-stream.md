@@ -1,5 +1,11 @@
 # Retained raw characteristic stream: red evidence
 
+Raw execution records referenced by filename below are historical archive members,
+not files shipped in this checkout. Originals were preserved byte-for-byte in a
+verified durable evidence attachment before removal from Git. Retained commands,
+regression tests, fixtures and proof boundaries remain the reproduction route;
+historical counts are not a claim about a fresh run.
+
 Starting revision: `0596865a0a46e18f7dc6d56561a79f538cf7bcea`, freshly fetched
 `origin/master` from prefanatic/quick_blue, identical to the audit baseline.
 The dispatcher-created isolated worktree initially pointed at
