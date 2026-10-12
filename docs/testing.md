@@ -70,6 +70,26 @@ native/hardware behavior. Real consumer builds remain a separate check using
 `python3 scripts/check-linux-consumer.py`; see [maintenance](maintenance.md) for
 the real documentation validation chain.
 
+## Bond-wait timeout reproduction
+
+`evidence/bond-wait-baseline-regression.dart.txt` is executable regression
+source, not an execution log. In a disposable checkout, copy it into the owning
+package so its relative fake-platform import resolves:
+
+```sh
+cp evidence/bond-wait-baseline-regression.dart.txt \
+  quick_blue_platform_interface/test/bond_wait_external_timeout_test.dart
+(cd quick_blue_platform_interface && flutter test \
+  test/bond_wait_external_timeout_test.dart --reporter expanded)
+```
+
+This deliberately checks that external `Future.timeout` releases the underlying
+bond observer and is expected to fail: timing out the wrapper future does not
+cancel observation. Use the built-in `waitForBondState(timeout: ...)` or
+cancellation token instead; `test/bond_state_wait_test.dart` exercises their
+cleanup. Neither path cancels OS pairing. Do not add this failing reproduction
+to the normal package suite.
+
 ## Native and generated boundaries
 
 | Change | Check |
