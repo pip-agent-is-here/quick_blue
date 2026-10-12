@@ -96,7 +96,7 @@ class CharacteristicLifecycleCoordinator {
       await valueSubscription.cancel();
     }
 
-    controller.onListen = () {
+    controller.onListen = () async {
       valueSubscription = valueStreamFor(deviceId, service, characteristic)
           .listen(
             controller.add,
@@ -114,6 +114,12 @@ class CharacteristicLifecycleCoordinator {
           await cancelValueSubscription();
         }
       }();
+      await setUpNotification;
+      if (!acquired) {
+        // Closing invokes onCancel, which awaits setup. Close only after that
+        // future settles, otherwise setup and automatic cancellation deadlock.
+        await controller.close();
+      }
     };
 
     controller.onCancel = () async {
