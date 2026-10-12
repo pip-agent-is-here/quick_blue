@@ -48,6 +48,8 @@
   channel accepts an optional allocator (default `calloc`); socket behavior is
   unchanged. Watchdog termination is failure characterization, not hardware proof.
 
+- Add executable Dart adapter contracts for Android, Darwin, Windows and fake
+  BlueZ/Linux; document event-only Windows reads and the mock-only proof boundary.
 - Add opt-in `BluetoothGatt.boundCharacteristic`, which resolves a
   characteristic handle bound to its GATT snapshot. After a service-database
   change, new read, write and notification submissions through that handle

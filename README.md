@@ -54,6 +54,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Linux GATT teardown characterization and proof boundary](docs/limitations.md#linux-gatt-teardown-characterization)
 - [Contributing and verification](CONTRIBUTING.md)
 - [Minimum-toolchain reproduction and proof boundaries](docs/testing.md)
+- [Executable Dart adapter contracts](docs/testing.md#dart-adapter-contracts) - Fake messenger/BlueZ coverage, not native or hardware certification.
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
 ## Download the example app
