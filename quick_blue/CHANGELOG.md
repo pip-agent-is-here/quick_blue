@@ -2,6 +2,10 @@
 
 ### Added
 
+- Add a side-effect-free Windows VM launch-argument dry run and executed shell
+  regression coverage; bind console TCP and RDP TCP/UDP to loopback by default
+  and require explicit opt-in for non-loopback exposure.
+
 - Select existing CI readiness checks for changelog-only changes; retain the
   inline current-version heading check and the Documentation workflow's checks.
 - Reject docs-site links that resolve outside the site root, including decoded
