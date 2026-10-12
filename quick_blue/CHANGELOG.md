@@ -16,6 +16,12 @@
 
 - Select existing CI readiness checks for changelog-only changes; retain the
   inline current-version heading check and the Documentation workflow's checks.
+
+- Add caller-local `timeout` and `cancellationToken` options to device and static
+  `waitForBondState`. Expiration releases the Dart event subscription even when
+  the snapshot or target event never arrives; concurrent observers remain
+  independent. Stopping observation does not initiate, modify, or cancel bonding.
+
 - Reject docs-site links that resolve outside the site root, including decoded
   traversal and symlink targets, while preserving internal parent-relative links.
 - Add hermetic docs-site, release-metadata and Linux consumer-construction
@@ -23,6 +29,7 @@
   and consumer validation failures enabled under optimization, and reject release
   constraint prefix drift and duplicate dependency declarations. Fixture results
   prove maintenance-tool behavior only, not deployment or native/hardware behavior.
+
 
 - Publish tagged example-app builds for Android, iOS Simulator, macOS, Linux
   x64, and Windows x64 with per-asset SHA-256 checksums and platform limitation
