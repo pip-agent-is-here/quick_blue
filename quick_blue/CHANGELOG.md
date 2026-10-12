@@ -7,6 +7,9 @@
   without either stream's cancellation evicting the other's active listeners.
   Native notification setup/teardown is unchanged; injected-event regressions
   verify Dart routing, not hardware notification delivery.
+- Repair Darwin Dart L2CAP listener ordering, terminal open failures, observable
+  sink bridge failures, exactly-once sink close and bounded late-open cleanup;
+  add executable fake-messenger regressions without changing Swift or Pigeon.
 
 ### Added
 

@@ -44,6 +44,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Knowledge bundle: setup, usage, platforms, and verification](docs/index.md)
 - [Install from Git](docs/install.md)
 - [Reusable raw characteristic value streams](docs/gatt.md#raw-value-streams-are-reusable) - Retain and re-listen without owning native notification setup; injected-event coverage proves Dart routing only.
+- [L2CAP socket lifetimes and Darwin bridge cleanup](docs/l2cap.md)
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Contributing and verification](CONTRIBUTING.md)
