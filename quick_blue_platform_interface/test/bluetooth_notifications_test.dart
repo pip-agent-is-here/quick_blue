@@ -8,6 +8,65 @@ import 'test_support/fake_quick_blue_platform.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final succeeds in <bool>[true, false]) {
+    test('cancelled pending notification setup settles its claim '
+        '(success: $succeeds)', () async {
+      final enable = Completer<void>();
+      final disable = Completer<void>();
+      final platform = FakeQuickBluePlatform(
+        setNotifiableCompletions: <Completer<void>>[enable, disable],
+      );
+      addTearDown(platform.dispose);
+      final characteristic = platform
+          .device('device-a')
+          .characteristic('service-a', 'characteristic-a');
+      final events = <Object>[];
+      final subscription = characteristic.notifications().listen(
+        events.add,
+        onError: (Object error) => events.add(error),
+        onDone: () => events.add('done'),
+      );
+      await pumpEventQueue();
+      platform.handleCharacteristicValueChanged(
+        'device-a',
+        'service-a',
+        'characteristic-a',
+        Uint8List.fromList(<int>[2]),
+      );
+      await pumpEventQueue();
+      var cancelled = false;
+      final cancellation = subscription.cancel().then((_) => cancelled = true);
+      await pumpEventQueue();
+      expect(cancelled, isFalse);
+      expect(platform.calls, hasLength(1));
+      if (succeeds) {
+        enable.complete();
+      } else {
+        enable.completeError(StateError('late setup failure'));
+      }
+      await pumpEventQueue();
+      if (succeeds) {
+        expect(cancelled, isFalse);
+        expect(platform.calls, <String>[
+          'setNotifiable device-a service-a characteristic-a notification',
+          'setNotifiable device-a service-a characteristic-a disabled',
+        ]);
+        disable.complete();
+      }
+      await cancellation.timeout(const Duration(seconds: 2));
+      await subscription.cancel();
+      await pumpEventQueue();
+      expect(cancelled, isTrue);
+      expect(events, isEmpty);
+      expect(platform.calls, <String>[
+        'setNotifiable device-a service-a characteristic-a notification',
+        if (succeeds)
+          'setNotifiable device-a service-a characteristic-a disabled',
+      ]);
+    });
+  }
+
+
   test(
     'BluetoothCharacteristic notifications enable and disable notify',
     () async {
