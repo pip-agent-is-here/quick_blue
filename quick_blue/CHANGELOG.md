@@ -10,6 +10,10 @@
 
 ### Added
 
+- Add deterministic fake-BlueZ characterizations of delayed Linux GATT discovery,
+  notification setup across teardown, and cache-invalidated notification release.
+  Document observed lifetime gaps without production changes or claims of real
+  BlueZ cleanup or hardware safety.
 - Add a side-effect-free Windows VM launch-argument dry run and executed shell
   regression coverage; bind console TCP and RDP TCP/UDP to loopback by default
   and require explicit opt-in for non-loopback exposure.

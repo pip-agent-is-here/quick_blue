@@ -46,6 +46,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Reusable raw characteristic value streams](docs/gatt.md#raw-value-streams-are-reusable) - Retain and re-listen without owning native notification setup; injected-event coverage proves Dart routing only.
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
+- [Linux GATT teardown characterization and proof boundary](docs/limitations.md#linux-gatt-teardown-characterization)
 - [Contributing and verification](CONTRIBUTING.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
