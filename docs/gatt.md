@@ -4,7 +4,7 @@ title: "Discover, write and subscribe"
 description: "Use valid GATT snapshots, explicit write framing and subscription-owned notifications."
 tags: ["gatt", "notifications", "writes"]
 
-sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_gatt.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_gatt_test.dart"}, {"id": "routing", "resource": "../quick_blue_platform_interface/lib/src/characteristic_lifecycle.dart"}, {"id": "retained", "resource": "../quick_blue_platform_interface/test/retained_characteristic_value_stream_test.dart"}]
+sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_gatt.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_gatt_test.dart"}, {"id": "routing", "resource": "../quick_blue_platform_interface/lib/src/characteristic_lifecycle.dart"}, {"id": "retained", "resource": "../quick_blue_platform_interface/test/retained_characteristic_value_stream_test.dart"}, {"id": "settlement", "resource": "../quick_blue_platform_interface/test/bluetooth_notifications_test.dart"}]
 ---
 
 # Discover, write and subscribe
@@ -39,6 +39,21 @@ await notifications.cancel();
 Concurrent listeners share native setup; the final listener disables it. Use
 `valueStream` plus `setNotifiable(...)` only when setup/teardown must be managed
 separately (listen before enabling).
+
+A terminal setup failure emits one error followed by `done`, even when the
+listener does not cancel on error. Values buffered while enabling are discarded
+on failure. A new subscription can retry setup; the failed subscription has no
+acquired claim to release. A conflicting notification/indication mode also
+terminates only the rejected stream and leaves the active owner's claim intact.
+[^routing][^settlement]
+
+If you cancel while setup is pending, cancellation waits for setup to settle.
+A late success releases that subscription's acquired claim exactly once; a late
+failure releases no claim. Concurrent same-mode listeners still share setup,
+and only the final owner disables updates. This does not abort native setup or
+add a setup deadline: if setup never settles, cancellation can remain pending.
+Controlled-future regressions prove this Dart stream/claim state machine, not
+Bluetooth readiness or native/hardware notification delivery.[^routing][^settlement]
 
 ## Raw value streams are reusable
 
@@ -126,3 +141,4 @@ listener future. See [capabilities](capabilities.md) for OS gates.
 [^source3]: GATT discovery, invalidation and chunked-write tests.
 [^routing]: Raw value controller registration, identity-safe cancellation and event dispatch.
 [^retained]: Injected-event regressions for retained streams and overlapping listeners; no native notification calls.
+[^settlement]: Controlled-future notification setup, cancellation, retry, shared ownership and conflicting-mode regressions; Dart lifecycle evidence only.
