@@ -30,6 +30,9 @@ and troubleshooting. For specific operations, see:
 - [Multiple Flutter engines](docs/multi-engine.md)
 - [L2CAP sockets](docs/l2cap.md)
 
+The [executable Dart adapter contracts](docs/testing.md#dart-adapter-contracts)
+cover fake messenger/BlueZ behavior, not native or hardware certification.
+
 ## Try the BLE explorer
 
 Run the [example app](quick_blue/example/README.md) to scan for devices and
