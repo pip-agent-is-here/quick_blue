@@ -204,6 +204,8 @@ jobs:
 
           # Enforces one shared version and the federated dependency pins.
           scripts/publish-packages.sh --dry-run
+          version="$(python3 -c "from pathlib import Path; print(next(line.split(': ', 1)[1] for line in Path('quick_blue/pubspec.yaml').read_text().splitlines() if line.startswith('version: ')))")"
+          python3 scripts/validate-release.py --tag "v$version"
 
       - name: Check changelog coverage
         run: |

@@ -127,6 +127,10 @@ the workflow's upstream guard together.
 
 ## Release metadata
 
+For offline tag/version and asset validation plus opt-in local Linux build-input
+capture, see [local release verification](testing.md#local-release-validation-and-build-inputs).
+These verification commands do not publish packages or assets.
+
 All five publishable packages share a version. In the same change, bump every
 package's `pubspec.yaml` version and align federated constraints: each platform
 package depends on `quick_blue_platform_interface` at that version and the

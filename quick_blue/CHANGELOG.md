@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Add offline release identity/asset validation and opt-in local Linux build-input
+  capture; CI readiness checks shared tag/version identity without publication.
+
 ### Fixed
 
 - Close notification streams after terminal setup failure with one error followed

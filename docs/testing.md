@@ -90,6 +90,45 @@ cancellation token instead; `test/bond_state_wait_test.dart` exercises their
 cleanup. Neither path cancels OS pairing. Do not add this failing reproduction
 to the normal package suite.
 
+## Local release validation and build inputs
+
+Run offline identity validation (no publication), then opt in to a real Linux
+release build and validate its partial asset manifest and local bytes:
+
+```sh
+python3 scripts/validate-release.py --tag v0.5.0
+python3 scripts/capture-build-inputs.py
+python3 scripts/validate-release.py --tag v0.5.0 \
+  --manifest .dart_tool/build-provenance/manifest.json --platform linux \
+  --artifact-dir .dart_tool/build-provenance
+```
+
+Replace the example tag with the shared package version. The validator requires
+the existing release-tag grammar and equality with `v` plus all five package
+versions; existing `+build` package versions do not fit the release-tag grammar.
+Manifest schema 1 requires `release_tag`, `package_version` and an `assets` array
+of `{name, sha256}` entries. Without `--platform`, all five platform assets are
+required; repeated explicit selections require exactly that partial set. Without
+`--artifact-dir`, only metadata is checked; with it, artifact bytes and named
+GNU/BSD `.sha256` sidecars must match. Extra provenance is ignored, not attested.
+
+The capture command needs the Flutter/Linux build toolchain and Pub access. It
+writes ignored logs, manifest, Linux tarball and checksum under
+`.dart_tool/build-provenance`; preserve raw records as durable artifacts, not Git.
+It records observed HEAD/status/source hashes, tool output, resolved dependency
+identities and lock/config hashes, native configuration and bundle hashes, and
+commands/log hashes. Source and dependency inputs must remain stable during the
+build. The tag is a package-derived declaration, not an observed Git release tag.
+Dependency identities are not exhaustive dependency-byte attestation. Neither
+command proves hardware semantics, byte-identical reproducibility, signing or
+publication. iOS simulator archives are not signed device distributables; desktop
+packaging does not imply signing/notarization. The release workflow's upload and
+artifact types are unchanged. CI readiness runs metadata validation only.
+
+Regression coverage lives in `scripts/test_validate_release.py` and
+`scripts/test_capture_build_inputs.py`; generator fixtures mock builds and do not
+replace the real capture command above.
+
 ## Native and generated boundaries
 
 | Change | Check |
