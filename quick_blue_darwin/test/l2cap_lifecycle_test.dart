@@ -109,6 +109,104 @@ void main() {
     return opening;
   }
 
+  Future<BleL2capSocket> openOn(
+    QuickBlueDarwin platform,
+    WidgetTester tester,
+  ) async {
+    mock('openL2cap', (_) async => <Object?>[null]);
+    final opening = platform.openL2cap('d', 25);
+    await tester.pump();
+    await emit(messages.PlatformL2CapSocketEvent(deviceId: 'd', opened: true));
+    await tester.pump();
+    final socket = await opening;
+    socket.stream.listen((_) {});
+    return socket;
+  }
+
+  testWidgets('stale remote-closed sink cannot close replacement', (
+    tester,
+  ) async {
+    final platform = QuickBlueDarwin();
+    final first = await openOn(platform, tester);
+    await emit(messages.PlatformL2CapSocketEvent(deviceId: 'd', closed: true));
+    await tester.pump();
+    final second = await openOn(platform, tester);
+    first.sink.close();
+    first.sink.close();
+    expect(() => first.sink.add(Uint8List(1)), throwsStateError);
+    expect(() => first.sink.addError(StateError('stale')), throwsStateError);
+    await tester.pump();
+    final staleCloses = closes;
+    second.sink.close();
+    await tester.pump();
+    expect(staleCloses, 0, reason: 'device-only close targets replacement');
+    expect(closes, 1);
+  });
+
+  for (final fails in [false, true]) {
+    testWidgets('late close reply (failure: $fails) preserves replacement', (
+      tester,
+    ) async {
+      final platform = QuickBlueDarwin();
+      final first = await openOn(platform, tester);
+      final reply = Completer<Object?>();
+      mock('closeL2cap', (_) {
+        closes++;
+        return reply.future;
+      });
+      first.sink.close();
+      await tester.pump();
+      await emit(
+        messages.PlatformL2CapSocketEvent(deviceId: 'd', closed: true),
+      );
+      await tester.pump();
+      final second = await openOn(platform, tester);
+      reply.complete(
+        fails ? <Object?>['CloseFailed', 'late', null] : <Object?>[null],
+      );
+      await tester.pump();
+      if (fails) expect(tester.takeException(), isA<PlatformException>());
+      await expectLater(
+        platform.openL2cap('d', 25),
+        throwsA(isA<QuickBlueException>()),
+      );
+      mock('closeL2cap', (_) async {
+        closes++;
+        return <Object?>[null];
+      });
+      second.sink.close();
+      await tester.pump();
+      expect(closes, 2);
+    });
+  }
+
+  testWidgets(
+    'late write failure is observable without affecting replacement',
+    (tester) async {
+      final platform = QuickBlueDarwin();
+      final first = await openOn(platform, tester);
+      final reply = Completer<Object?>();
+      mock('writeL2cap', (_) => reply.future);
+      first.sink.add(Uint8List(1));
+      await tester.pump();
+      await emit(
+        messages.PlatformL2CapSocketEvent(deviceId: 'd', closed: true),
+      );
+      await tester.pump();
+      final second = await openOn(platform, tester);
+      reply.complete(<Object?>['WriteFailed', 'late', null]);
+      await tester.pump();
+      expect(tester.takeException(), isA<PlatformException>());
+      await expectLater(
+        platform.openL2cap('d', 25),
+        throwsA(isA<QuickBlueException>()),
+      );
+      second.sink.close();
+      await tester.pump();
+      expect(closes, 1);
+    },
+  );
+
   testWidgets('sink close invokes native close exactly once', (tester) async {
     final socket = await open(tester);
     socket.sink.close();

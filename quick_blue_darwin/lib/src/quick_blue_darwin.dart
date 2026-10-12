@@ -721,7 +721,9 @@ class _L2capSession implements EventSink<Uint8List> {
 
   @override
   void close() {
-    if (closing) return;
+    // A remote closed event may have released this device for a replacement.
+    // The device-only bridge must never close that replacement via an old sink.
+    if (closing || disposed) return;
     closing = true;
     api
         .closeL2cap(deviceId)
