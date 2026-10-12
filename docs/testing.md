@@ -80,7 +80,7 @@ the real documentation validation chain.
 | Android Kotlin | `(cd quick_blue/example/android && ./gradlew :quick_blue:testDebugUnitTest)` |
 | Windows ownership | Native CMake/CTest target on Windows (CI `build-windows`) |
 | Linux external Git consumers | `python3 scripts/check-linux-consumer.py` (isolated consumers, initially empty Pub caches; requires Flutter Linux tools, Git and Pub network access, not BLE hardware) |
-| Release metadata | `scripts/publish-packages.sh --dry-run` |
+| Release metadata | `scripts/publish-packages.sh --dry-run`; CI also checks the current-version changelog heading |
 | Documentation | [Maintenance checks](maintenance.md), source review, and site build when configured |
 
 Darwin's Linux type-check harness uses signature-faithful stubs; it does not prove
@@ -161,6 +161,11 @@ refreshes checkout without reinstalling Windows. `QUICK_BLUE_WINDOWS_RESET=1`
 rebuilds the VM disk; do not use it for routine reruns.
 
 ## Report evidence, not assumptions
+
+CI selects readiness checks for `**/CHANGELOG.md` and release pubspec changes.
+Documentation validation, maintenance-tool tests and the clean site build belong
+to the Documentation workflow and its explicit path filters. Hosted iOS/macOS/Windows
+builds explicitly disabled by `SKIP_HOSTED_PLATFORM_BUILDS` remain unverified.
 
 Record the exact command, revision, host/device, executed scenarios, result and
 any skips. If blocked, state the command attempted, the concrete blocker, and

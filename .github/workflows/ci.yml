@@ -52,6 +52,7 @@ jobs:
         with:
           filters: |
             validate:
+              - '**/CHANGELOG.md'
               - '.github/dependabot.yml'
               - '.github/workflows/**'
               - 'scripts/**'
