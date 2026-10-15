@@ -5,9 +5,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 void main() {
+  // Flutter's test isolate does not expose Isolate.packageConfig. Pub writes
+  // the configuration at the package root or its containing workspace root.
+  final packageConfig = [
+    File('.dart_tool/package_config.json'),
+    File('../.dart_tool/package_config.json'),
+  ].firstWhere((file) => file.existsSync()).absolute.path;
   for (final scenario in [
     'send-einval',
     'send-eintr',
@@ -17,7 +23,7 @@ void main() {
   ]) {
     test('$scenario: watchdog termination is failure characterization', () async {
       final process = await Process.start('dart', [
-        '--packages=../.dart_tool/package_config.json',
+        '--packages=$packageConfig',
         'test/harness/l2cap_case_runner.dart',
         scenario,
       ]);

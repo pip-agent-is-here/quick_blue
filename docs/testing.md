@@ -50,6 +50,26 @@ require affected package tests plus a matching platform build or smoke test when
 available. Use platform builds or the example app for Android, iOS, macOS,
 Windows and Linux behavior that unit tests cannot cover.
 
+## Standalone package boundary
+
+With a separately installed Dart 3.13 SDK, run:
+
+```sh
+python3 scripts/check-headless-consumer.py --dart /absolute/dart-sdk/bin/dart --flutter
+```
+
+The script retains an external matched-source fixture and fresh pub caches,
+checks consumer graph roots and every resolved manifest for Flutter SDK
+dependencies/constraints, saves exact dependency versions, then runs `dart
+analyze` and `dart test` in isolated core, platform-interface and Linux copies.
+`--flutter` additionally builds external Flutter consumers and verifies generated
+Linux registration; omit it on a host without Flutter. It makes no source Git
+commits, no pub-cache edits and no Bluetooth calls. Pure fake-clock tests retain
+timer cleanup checks, while native `PlatformException` coverage stays in
+`quick_blue/test/native_failure_reason_test.dart`. These are dependency/API and
+translation checks, not hardware proof. The existing external Git-consumer CI
+check remains separate and includes core at the same snapshot revision.
+
 ## Fast checks
 
 ```sh
@@ -76,7 +96,9 @@ python3 -O -m unittest discover -s scripts -p 'test_*.py'
 
 The Documentation workflow runs these tests alongside OKF validation and a clean
 site build. The suite includes 13 OKF tests, 15 built-site tests, four release
-metadata tests and five consumer-construction tests. Site fixtures run the copied
+metadata tests and five consumer-construction tests.
+Six additional headless graph/manifest tests reject Flutter SDK constraints,
+mixed repository snapshots and workspace roots while permitting plugin metadata. Site fixtures run the copied
 validator in normal and optimized subprocesses, checking navigation coverage and
 duplicates, rendered pages, anchors, missing targets, absolute/encoded project
 prefix escapes, resolved dot-segment/encoded/relative traversal, file and directory
@@ -262,6 +284,8 @@ for process exit/reaping. Cleanup also kills/reaps on assertion/startup failure.
 JSON records include the actual exit code, elapsed time, syscall/ownership counters,
 main-isolate heartbeat and an independent reporter-isolate heartbeat. Do not run
 the child runner directly: its non-yielding cases cannot be stopped by Dart timers.
+The pure-Dart tests locate the package or workspace Pub configuration for child
+processes, so the same watchdog runs in both workspace and isolated package checks.
 For a safely bounded single reproduction:
 
 ```sh
