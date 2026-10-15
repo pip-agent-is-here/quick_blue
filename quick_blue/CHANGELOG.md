@@ -3,6 +3,20 @@
 - Restore workspace dependency resolution on the declared Flutter 3.44.2 /
   Dart 3.12.2 minimum by pinning development-only ffigen to 21.0.0.
 
+### Changed
+
+- Extract the generic facade into `quick_blue_core`, sharing existing
+  platform-interface state. Flutter's public and former `src/quick_blue.dart`
+  entrypoints reexport the same classes; Android/Pigeon remains Flutter-owned.
+- Remove Flutter SDK constraints from core, platform interface and Linux;
+  migrate pure contracts to `dart test` and keep native exception/channel tests
+  in the Flutter package. Linux retains explicit registration and declares
+  `implements: quick_blue` for Flutter's desktop Dart plugin selection.
+- Add a standalone Dart 3.13 fresh-cache dependency/manifest check and isolated
+  package analysis/tests. These establish package/API compatibility, not BLE
+  hardware, operator CLI readiness or ARM64 deployment acceptance.
+
+
 ### Fixed
 
 - Isolate Flutter template bootstrap from external Linux consumer dependency
