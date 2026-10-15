@@ -6,6 +6,8 @@
   and document SDK migration. Retain standalone Dart 3.13 acceptance, the
   Flutter-free dependency graph and existing generation pins. The separate Linux
   publication metadata failure remains unresolved; no validation is disabled.
+- Isolate cold-SDK Flutter template bootstrap from external consumer dependency
+  resolution, retaining the assertion that the consumer Pub cache starts empty.
 
 
 ### Headless Linux
