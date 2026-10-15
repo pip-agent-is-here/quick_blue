@@ -42,12 +42,11 @@ before running an asset.
 
 ## Download an evaluation build
 Each published versioned GitHub Release attaches example-app builds for
-Android, iOS Simulator, macOS, Linux x64, and Windows x64. There are no
-releases yet; the first one will follow the shared package version (for
-example `v0.5.0`). Download the assets and adjacent `.sha256` files from the
+Android, iOS Simulator, macOS, Linux x64, and Windows x64. Release tags follow
+the shared package version (for example `v0.5.0`). Download the assets and
+adjacent `.sha256` files from the
 [Releases page](https://github.com/prefanatic/quick_blue/releases). Assets are
-built by CI from the source pointed to by that release tag, so an asset always
-matches the tagged source rather than the latest master.
+built by CI from the release tag rather than the latest `master`.
 
 Assets follow one naming pattern: `quick_blue-example-<tag>-<platform>.<ext>`,
 where `<tag>` is the release tag (for example `quick_blue-example-v0.5.0-android.apk`).
@@ -80,11 +79,13 @@ To install and run the downloaded asset:
 - **macOS**: unzip to get `Runner.app`, move it anywhere (for example
   `/Applications`), and launch it. The app is not Developer ID signed or
   notarized, so Gatekeeper blocks the first launch: right-click `Runner.app`
-  and choose Open, or run
-  `xattr -dr com.apple.quarantine Runner.app` after unzipping. Bluetooth
+  and choose Open. Only if you trust the downloaded app, you can instead run
+  `xattr -dr com.apple.quarantine Runner.app` after unzipping to remove its
+  quarantine flag. Bluetooth
   permission is prompted on first use.
-- **Linux x64**: extract with `tar -xzf <asset>.tar.gz -C quick_blue_example`
-  and run `./quick_blue_example`. The bundle does not include system
+- **Linux x64**: create an extraction directory with `mkdir -p quick_blue_example`,
+  extract with `tar -xzf <asset>.tar.gz -C quick_blue_example`, then run
+  `./quick_blue_example/quick_blue_example`. The bundle does not include system
   libraries; compatible GTK and BlueZ runtime libraries and the Quick Blue
   D-Bus policy (see the package README) are required.
 - **Windows x64**: extract the ZIP anywhere and launch
@@ -92,11 +93,12 @@ To install and run the downloaded asset:
   executable: choose More info, then Run anyway.
 
 These are evaluation builds, not store-ready signed applications. The Android
-APK is debug-signed and never installed from a store; the iOS artifact is
+APK is debug-signed; the iOS artifact is
 Simulator-only and is not an installable device IPA; the macOS app is not
-Developer ID signed or notarized, so Gatekeeper may block it; and none of the
-desktop builds are Authenticode-signed. All five platforms require Bluetooth
-LE hardware and the permissions described in the package README.
+Developer ID signed or notarized; and the Windows build is not Authenticode-signed.
+BLE workflows require a supported host, Bluetooth LE hardware and the
+permissions described in the package README. The Simulator artifact does not
+establish physical iOS BLE support.
 
 > To use the code in this repository, follow the
 > [Git installation instructions](quick_blue/README.md#install). A hosted
