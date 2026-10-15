@@ -3,6 +3,26 @@ import 'package:quick_blue_linux/src/connection_ownership.dart';
 
 void main() {
   test(
+    'scoped lease identity is retained across failed detach and retry',
+    () async {
+      final lease = _FakeConnectionLease(detachError: StateError('failed'));
+      final ownership = ConnectionOwnership(lease);
+      await ownership.attach('device-a', leaseId: 'adapter-a/device-a');
+      await ownership.attach('device-a', leaseId: 'replacement/device-a');
+      expect(ownership.deviceIds, ['device-a']);
+      expect(lease.attachments, ['adapter-a/device-a']);
+      await expectLater(
+        ownership.detach('device-a', onLastClient: () async {}),
+        throwsStateError,
+      );
+      expect(ownership.owns('device-a'), isTrue);
+      lease.detachError = null;
+      await ownership.detach('device-a', onLastClient: () async {});
+      expect(lease.detachments, ['adapter-a/device-a', 'adapter-a/device-a']);
+      expect(ownership.deviceIds, isEmpty);
+    },
+  );
+  test(
     'successful attachments are tracked and repeated calls are coalesced',
     () async {
       final lease = _FakeConnectionLease();
@@ -56,7 +76,7 @@ class _FakeConnectionLease implements QuickBlueLinuxConnectionLease {
   _FakeConnectionLease({this.attachError, this.detachError});
 
   final Object? attachError;
-  final Object? detachError;
+  Object? detachError;
   final List<String> attachments = <String>[];
   final List<String> detachments = <String>[];
 

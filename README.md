@@ -67,6 +67,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Linux GATT teardown characterization and proof boundary](docs/limitations.md#linux-gatt-teardown-characterization)
+- [Linux adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary) - Same-adapter clients share final-owner cleanup; different adapters release independently. Cooperating clients require matching revisions.
 - [Contributing and verification](CONTRIBUTING.md)
 - [Minimum-toolchain reproduction and proof boundaries](docs/testing.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)

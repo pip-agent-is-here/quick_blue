@@ -4,7 +4,7 @@ title: "Connection lifetimes and retries"
 description: "Choose one-shot or subscription-owned connections and handle overlapping operations."
 tags: ["connections", "lifecycle"]
 
-sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/managed_connection_lifecycle.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}]
+sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/managed_connection_lifecycle.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "source4", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}, {"id": "linux-gatt", "resource": "../quick_blue_linux/lib/src/gatt_session.dart"}, {"id": "linux-gatt-tests", "resource": "../quick_blue_linux/test/gatt_session_test.dart"}]
 ---
 
 # Connection lifetimes and retries
@@ -38,10 +38,11 @@ remains outstanding until platform completion or engine disposal.
 Service discoveries coalesce; disconnect cancels pending discovery. Android
 additionally bounds final-client teardown and ignores retired-GATT callbacks;
 this disconnect reconciliation guarantee is Android-specific.[^source4]
-Linux's pending property waiter can survive clear and emit after same-address
-replacement discovery in the
-[fake-BlueZ characterization](limitations.md#linux-gatt-teardown-characterization).
-Facade cancellation does not prove this native-session work stopped.
+Linux clear cancels its pending discovery waiter and prevents old resolution
+from emitting into a replacement discovery. The
+[fake-BlueZ characterization](limitations.md#linux-gatt-teardown-characterization)
+distinguishes the historical gap from current regression behavior. Facade caller
+cancellation alone still does not prove submitted native-session work stopped.
 
 ## Managed reconnection
 
@@ -92,7 +93,8 @@ an unlimited reconnecting service.
 API. Cancel public scan, Bluetooth-state, notification and managed-connection
 subscriptions and await outstanding requests first. Shutdown is not a native
 request abort or a deadline for stalled BlueZ calls. It releases only this
-client's owned connections under the last-client lease rule, then property
+client's owned connections under the last-client lease rule, scoped by actual
+local adapter address plus remote device address, then property
 watches and transports. Cleanup attempts continue after failures; the first
 shutdown failure is thrown and secondary failures are logged. Initialization
 failure releases acquired subscriptions/transport, preserves its primary error

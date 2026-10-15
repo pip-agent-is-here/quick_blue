@@ -417,7 +417,12 @@ class QuickBlueLinux extends QuickBluePlatform {
     await _ensureInitialized();
     final device = _getDeviceOrThrow(deviceId);
 
-    await _connectionOwnership.attach(deviceId);
+    // Capture the actual BlueZ adapter, including for default selection. Retain
+    // this identity through detach even if the cached device is later replaced.
+    await _connectionOwnership.attach(
+      deviceId,
+      leaseId: '${device.adapter.address}/$deviceId',
+    );
 
     try {
       await _ensureConnectedDevice(device);

@@ -36,7 +36,7 @@ void main() {
       expect(selected.connected, isTrue);
       expect(selected.disconnects, 0);
       expect(foreign.disconnects, 0);
-      expect(lease.attaches, [remote]);
+      expect(lease.attaches, ['${first.address}/$remote']);
       expect(lease.detaches, isEmpty);
       await platform.close();
     },
