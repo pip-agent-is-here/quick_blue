@@ -11,6 +11,7 @@ import 'package:quick_blue_linux/src/gatt_session.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 
 import 'test_support/future_gate.dart';
+import 'adapter_selection_test.dart' as adapter_fake;
 
 void main() {
   late _Fixture f;
@@ -703,6 +704,8 @@ class _Fixture {
 }
 
 class _Device implements BlueZDevice {
+  @override
+  BlueZAdapter get adapter => adapter_fake.Adapter('02:00:00:00:00:00');
   @override
   final address = 'AA:BB:CC:DD:EE:FF';
   @override

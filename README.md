@@ -46,6 +46,10 @@ and troubleshooting. For specific operations, see:
 - [Multiple Flutter engines](docs/multi-engine.md)
 - [L2CAP sockets](docs/l2cap.md)
 
+With [adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary),
+same-adapter clients share final-owner cleanup; different adapters release
+independently. Cooperating clients require matching revisions.
+
 ## Try the BLE explorer
 
 Run the [example app](quick_blue/example/README.md) to scan for devices and

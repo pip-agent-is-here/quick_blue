@@ -6,6 +6,7 @@ import 'package:quick_blue_linux/quick_blue_linux.dart';
 import 'package:quick_blue_linux/src/connection_lease.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 import 'package:test/test.dart';
+import 'adapter_selection_test.dart' as adapter_fake;
 
 void main() {
   for (final stage in ['before-start', 'lease', 'native']) {
@@ -143,7 +144,7 @@ void main() {
     final lease = Lease();
     final platform = QuickBlueLinux.withClient(client, connectionLease: lease);
     await platform.connect(owned.address);
-    expect(lease.owners, {owned.address});
+    expect(lease.owners, {'${owned.adapter.address}/${owned.address}'});
     await platform.close().timeout(watchdog);
     await platform.close().timeout(watchdog);
     expect(client.closes, 1);
@@ -325,6 +326,8 @@ class Client implements BlueZClient {
 
 class Device implements BlueZDevice {
   Device(this.address);
+  @override
+  BlueZAdapter get adapter => adapter_fake.Adapter('02:00:00:00:00:00');
   @override
   final String address;
   @override
