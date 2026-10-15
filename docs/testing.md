@@ -338,6 +338,8 @@ main-isolate heartbeat and an independent reporter-isolate heartbeat. Do not run
 the child runner directly: its non-yielding cases cannot be stopped by Dart timers.
 The pure-Dart tests locate the package or workspace Pub configuration for child
 processes, so the same watchdog runs in both workspace and isolated package checks.
+Standalone tests reuse their running Dart executable even when its SDK is absent
+from `PATH`; Flutter's test runner uses the Flutter toolchain's `dart` on `PATH`.
 For a safely bounded single reproduction:
 
 ```sh

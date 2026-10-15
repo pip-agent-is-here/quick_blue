@@ -22,7 +22,11 @@ void main() {
     'send-zero',
   ]) {
     test('$scenario: watchdog termination is failure characterization', () async {
-      final process = await Process.start('dart', [
+      // Standalone SDKs need not be on PATH. Flutter tests run in flutter_tester,
+      // so retain the Flutter toolchain's PATH lookup only in that environment.
+      final executable = Platform.resolvedExecutable;
+      final dart = executable.endsWith('flutter_tester') ? 'dart' : executable;
+      final process = await Process.start(dart, [
         '--packages=$packageConfig',
         'test/harness/l2cap_case_runner.dart',
         scenario,
