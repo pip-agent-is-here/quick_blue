@@ -66,6 +66,24 @@ not meet these requirements.
   verify adapter behavior for every native knob.
 - Darwin type checking on Linux uses stubs and cannot verify platform runtime
   callbacks or background relaunch.
+- Android queue characterization in
+  `quick_blue/android/src/test/kotlin/com/example/quick_blue/GattQueueStallCharacterizationTest.kt`
+  proves JVM state-machine behavior only: an accepted operation without a callback
+  blocks later admission; teardown clears active/queued state; detached clients
+  receive no settlement callback at admission or teardown. Resource-loss draining
+  admits in FIFO order but dispatches disconnected callbacks in reverse order
+  through recursive advancement. Queue completion returns an operation without
+  delivering its success callback and has no GATT identity argument: bypassing
+  the broker gate after reconnect returns the replacement operation for a
+  same-kind late completion. The broker's `isCurrentGatt` checks in
+  `quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt`
+  are inspection-only evidence here, not an executed old-GATT callback test.
+  A fix must settle dropped clients explicitly and include tests that
+  prove stale callbacks cannot settle replacement work at the identity gate
+  (instrumented) or an identity-aware queue boundary. These tests do not fix
+  the gaps or add timer-based recovery. The start-throw path
+  remains untested: JVM `android.util.Log.e` is not mocked; covering it requires
+  injectable logging or Android test configuration.
 
 Do not add platform guarantees based on another platform's tests. Report hardware
 or host unavailability explicitly. Android bounded disconnect reconciliation is
