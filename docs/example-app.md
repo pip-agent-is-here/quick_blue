@@ -56,6 +56,11 @@ slot coalesces repeated changes; the shared runner waits for the previous public
 discovery future and cleanup before starting the next appropriate discovery.
 Changes during discovery retire its results and queue a replacement. Switching
 or disconnecting discards requests that no longer belong to the selection.
+During explicit release, manual refresh and service-change refresh are ignored;
+late discovery successes and failures cannot restore disconnected rows or status.
+After bounded release completes, reconnect can own a new refresh on the shared
+runner without reviving retired work. These release races are covered using the
+real public coordinators in `test/src/explorer_lifecycle_test.dart`.
 Discovery errors are surfaced, not retried indefinitely. Writes are submitted
 once and never automatically retried by the explorer.
 
