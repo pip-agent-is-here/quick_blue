@@ -7,6 +7,9 @@
 
 ### Headless Linux
 
+- Keep the CLI example compatible with the workspace's Dart 3.12.2 minimum and
+  run standalone L2CAP watchdog children with the active SDK even off `PATH`.
+
 - Add a standalone ARM64 cross-build/ELF verifier with optional controlled QEMU
   help, fake-flow and glibc/libbluetooth loader checks. Document distribution
   runtime requirements. These checks do not exercise Bluetooth or physical hardware.

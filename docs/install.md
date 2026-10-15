@@ -120,8 +120,10 @@ containing these packages.
 
 The public Linux CLI (`quick_blue_linux/example/`, repository-relative) is copied by
 `scripts/check-headless-consumer.py` into a retained external `cli/` directory,
-with matched core/interface/Linux sources and explicit path overrides. The
-example's three direct dependencies are core, Linux and platform interface;
+with matched core/interface/Linux sources and explicit path overrides.
+The CLI example shares the workspace's Dart 3.12.2 minimum; the standalone
+acceptance fixture deliberately uses Dart 3.13. The example's three direct
+dependencies are core, Linux and platform interface;
 `test` is development-only. Runtime dependency closure is the same as above.
 The verifier checks this CLI's graph/manifests too, runs `dart analyze` and
 `dart test`, then `dart compile exe bin/main.dart -o build/ble_cli` and
