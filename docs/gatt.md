@@ -194,8 +194,7 @@ try {
 
 ### Resolve fresh handles after a change
 
-Bound handles fail fast instead of going stale quietly. After a
-`gattServiceChangedStream` event, rediscover the database and resolve again:
+After a `gattServiceChangedStream` event, rediscover the database and resolve again:
 
 ```dart
 // Run inside an awaited async workflow; discovery errors reach its caller.
@@ -212,7 +211,7 @@ await for (final change in device.gattServiceChangedStream) {
 Each `discoverGatt()` result carries its own validity, and bound handles
 resolved from the fresh snapshot submit normally again.
 
-### Direct-ID handles stay the compatibility escape hatch
+### Keep ID-only handles when you manage validity
 
 Migration is opt-in per handle; every existing entry point keeps its current
 semantics:
@@ -233,17 +232,14 @@ must fail before it is sent.
 Neither `disconnect()` nor a subsequent `connect()` invalidates a snapshot:
 `isValid` stays `true` across disconnect/reconnect, and bound handles keep
 submitting. Only a platform-reported service-database change event
-invalidates a snapshot. This is the existing policy, characterized by the
-regression tests — observed current behavior, not a newly invented
-guarantee that reconnects will never invalidate a snapshot.[^source4]
+invalidates a snapshot. Tests cover this current policy; they do not guarantee
+that a reconnected peripheral has an unchanged database.[^source4]
 
 ### Evidence scope
 
-The bound-handle contract is established by executable Dart tests against a
-fake platform: they prove the additive Dart validity contract, namely that
-the guard runs before platform submission. They do not establish native-side
-rejection, hardware behavior, or any rollback of IO already handed to a
-platform.[^source4]
+Dart tests against a fake platform verify that the guard runs before submission.
+They do not verify native-side rejection, peripheral behavior or rollback of
+already-submitted IO.[^source4]
 
 [^source3]: GATT discovery, invalidation and chunked-write tests.
 [^routing]: Raw value controller registration, identity-safe cancellation and event dispatch.
