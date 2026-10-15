@@ -48,6 +48,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [L2CAP socket lifetimes and Darwin bridge cleanup](docs/l2cap.md)
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
+- [Linux GATT teardown characterization and proof boundary](docs/limitations.md#linux-gatt-teardown-characterization)
 - [Contributing and verification](CONTRIBUTING.md)
 - [Minimum-toolchain reproduction and proof boundaries](docs/testing.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
