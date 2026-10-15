@@ -1,9 +1,10 @@
 ## Unreleased
 
-- Restore workspace dependency resolution on the declared Flutter 3.44.2 /
-  Dart 3.12.2 minimum by pinning development-only ffigen to 21.0.0; add a
-  fresh-resolution minimum-toolchain analysis/test CI lane without changing
-  runtime dependencies or generated bindings.
+- Drop older Flutter support: require stable Flutter 3.47.7 (bundled Dart
+  3.13.5), pin primary and fresh-resolution minimum-toolchain CI to that release,
+  and document SDK migration. Retain standalone Dart 3.13 acceptance, the
+  Flutter-free dependency graph and existing generation pins. The separate Linux
+  publication metadata failure remains unresolved; no validation is disabled.
 
 ### Headless Linux
 

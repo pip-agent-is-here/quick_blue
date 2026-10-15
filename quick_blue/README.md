@@ -42,7 +42,7 @@ rules. This package README remains a package-level introduction and usage guide.
 
 | Target | Minimum or runtime requirement |
 | :--- | :--- |
-| Flutter | 3.44.2 (CI and hardware verification run 3.47.6) |
+| Flutter | 3.47.7 (declared minimum and pinned CI; older releases unsupported) |
 | Dart | 3.12.2 |
 | Android | API 26 |
 | iOS | 13.0 |

@@ -3,6 +3,10 @@
 `quick_blue` is a federated Flutter plugin for Bluetooth Low Energy (BLE) on
 Android, iOS, macOS, Windows, and Linux.
 
+Flutter consumers require Flutter 3.47.7 or newer; CI pins stable 3.47.7 with
+Dart 3.13.5. Older Flutter support is dropped; upgrade the SDK before resolving.
+Standalone Dart 3.13 acceptance and its Flutter-free dependency graph are retained.
+
 For Linux services without Flutter, use `quick_blue_core` with `quick_blue_linux`
 and register the Linux implementation explicitly. Flutter imports stay unchanged.
 Follow the [standalone installation instructions](docs/install.md#standalone-dart-linux);

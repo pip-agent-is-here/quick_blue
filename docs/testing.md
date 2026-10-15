@@ -10,16 +10,17 @@ sources: [{"id": "source1", "resource": "../.github/workflows/ci.yml"}, {"id": "
 # Verify repository changes
 
 Run commands from the repository root unless a subshell below changes directory.
-CI keeps the primary Flutter `3.47.6` pin and separately exercises the declared
-minimum Flutter `3.44.2` / Dart `3.12.2` with fresh resolution, root analysis and
+CI pins the primary and declared-minimum Flutter lanes to stable `3.47.7`
+(framework `abaf9c523780a608bd46686fd5e53740a07077f8`, bundled Dart `3.13.5`).
+The minimum lane independently uses fresh resolution, root analysis and
 all six package test suites. The verification step uses an isolated pub cache and no
 Flutter action cache; it proves Dart compatibility, not native or BLE behavior.
 
-To reproduce locally, select an isolated Flutter `3.44.2` SDK (do not replace the
+To reproduce locally, select an isolated Flutter `3.47.7` SDK (do not replace the
 host SDK), then run:
 
 ```sh
-export PATH="/absolute/path/to/flutter-3.44.2/bin:$PATH"
+export PATH="/absolute/path/to/flutter-3.47.7/bin:$PATH"
 export PUB_CACHE="$PWD/.dart_tool/pub-cache-minimum"
 flutter --version
 flutter pub get
@@ -30,10 +31,14 @@ for package in quick_blue quick_blue/example quick_blue_darwin quick_blue_linux 
 done
 ```
 
-Linux's development-only ffigen pin is `21.0.0`: version `22.0.0` pulls
-`code_assets ^2.0.0` / `hooks ^2.2.0` / `record_use ^1.0.0`, requiring
-`meta ^1.19.0`, while Flutter `3.44.2` pins `meta 1.18.0`. The minimum remains
-unchanged; no runtime dependency or generated binding is changed. On Fedora,
+Older Flutter versions are no longer supported. Keep both CI pins and Flutter
+package constraints aligned when advancing this floor; standalone Dart 3.13
+acceptance remains separate and must not gain a Flutter SDK dependency.
+`scripts/test_flutter_support_policy.py` checks that both CI pins, Flutter package
+floors and the external Flutter consumer recipe agree, and that standalone
+package environments remain Flutter-free. It does not execute either SDK.
+Linux's development-only ffigen pin remains `21.0.0` for reproducible generation;
+no runtime dependency or generated binding is changed. On Fedora,
 regenerate with `dart run ffigen --config ffigen.yaml --compiler-opts
 '-I/usr/lib/clang/22/include'` inside `quick_blue_linux` when libclang's bundled
 resource headers are not found automatically. This host-specific include path
