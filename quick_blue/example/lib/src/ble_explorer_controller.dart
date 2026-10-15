@@ -302,7 +302,12 @@ class BleExplorerController extends ChangeNotifier {
 
     _gattChangeSubscription = device.gattServiceChangedStream.listen(
       (_) {
-        if (_disposed || revision != _selectionRevision) return;
+        if (_disposed ||
+            revision != _selectionRevision ||
+            _disconnecting ||
+            !connected) {
+          return;
+        }
         _invalidateGatt();
         _mutate(() {
           status = 'GATT database changed.';
@@ -316,7 +321,10 @@ class BleExplorerController extends ChangeNotifier {
       },
       onError: (Object error) {
         gattErrors.add(error);
-        if (!_disposed && revision == _selectionRevision) {
+        if (!_disposed &&
+            revision == _selectionRevision &&
+            !_disconnecting &&
+            connected) {
           _setError('GATT changes failed', error);
         }
       },
@@ -336,7 +344,11 @@ class BleExplorerController extends ChangeNotifier {
 
   Future<void> connectSelected() async {
     final deviceId = selectedDeviceId;
-    if (_disposed || deviceId == null || connecting || connected) {
+    if (_disposed ||
+        deviceId == null ||
+        connecting ||
+        connected ||
+        _disconnecting) {
       return;
     }
     final attempt = ++_connectionAttempt;
@@ -411,6 +423,8 @@ class BleExplorerController extends ChangeNotifier {
       }
       _mutate(() {
         connectionState = BlueConnectionState.disconnected;
+        _refreshRequest = null;
+        _invalidateGatt();
         _clearGattState(disposeControllers: true);
         status = 'Disconnected.';
         _log(status!, BleEventSeverity.info);
@@ -443,7 +457,7 @@ class BleExplorerController extends ChangeNotifier {
 
   Future<void> discoverServices() async {
     final deviceId = selectedDeviceId;
-    if (deviceId == null || !connected || discovering) {
+    if (deviceId == null || !connected || discovering || _disconnecting) {
       return;
     }
 
@@ -451,7 +465,10 @@ class BleExplorerController extends ChangeNotifier {
   }
 
   Future<void> _discoverServices(String deviceId) {
-    if (_disposed || selectedDeviceId != deviceId || !connected) {
+    if (_disposed ||
+        selectedDeviceId != deviceId ||
+        !connected ||
+        _disconnecting) {
       return Future<void>.value();
     }
     // A single pending slot coalesces invalidations. The runner is shared even
@@ -469,7 +486,10 @@ class BleExplorerController extends ChangeNotifier {
         final request = _refreshRequest!;
         _refreshRequest = null;
         final (deviceId, selection) = request;
-        if (_disposed || selection != _selectionRevision || !connected) {
+        if (_disposed ||
+            selection != _selectionRevision ||
+            !connected ||
+            _disconnecting) {
           continue;
         }
         _invalidateGatt();
@@ -500,7 +520,11 @@ class BleExplorerController extends ChangeNotifier {
   }
 
   bool _isCurrentGatt(String deviceId, int epoch) =>
-      !_disposed && selectedDeviceId == deviceId && _gattEpoch == epoch;
+      !_disposed &&
+      !_disconnecting &&
+      connected &&
+      selectedDeviceId == deviceId &&
+      _gattEpoch == epoch;
 
   bool _ownsGattRow(BluetoothService service, int epoch) =>
       _isCurrentGatt(service.deviceId, epoch) &&

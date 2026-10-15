@@ -51,7 +51,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Linux GATT teardown characterization and proof boundary](docs/limitations.md#linux-gatt-teardown-characterization)
 - [Contributing and verification](CONTRIBUTING.md)
 - [Minimum-toolchain reproduction and proof boundaries](docs/testing.md)
-- [BLE explorer connection and GATT lifetimes](docs/example-app.md#explorer-connection-ownership)
+- [BLE explorer connection and GATT lifetimes](docs/example-app.md#explorer-connection-ownership) - Refresh admission stops during release; retired discovery cannot restore disconnected UI.
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
 ## Download the example app
