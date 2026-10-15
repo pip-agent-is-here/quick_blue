@@ -49,12 +49,12 @@ preserve gaps, not safe teardown. Evidence proves reproducible fake-BlueZ
 lifetime behavior only, not real BlueZ cleanup, D-Bus ownership release, or
 hardware semantics. Production code is unchanged by these tests.
 
-Future corrective acceptance must target these reproduced gaps: old resolution
+To fix these gaps, old resolution
 must not emit into a replacement lifetime and must settle observably; late setup
 must not revive watches/values and must balance acquired native ownership;
 cache-invalidated final release must stop the old characteristic exactly once
-and remove its listener without re-resolution. These are future requirements,
-not assertions the current implementation passes.
+and remove its listener without re-resolution. The current implementation does
+not meet these requirements.
 
 ## Verification gaps
 
