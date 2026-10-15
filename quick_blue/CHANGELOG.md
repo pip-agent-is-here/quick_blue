@@ -41,6 +41,12 @@
   the snapshot or target event never arrives; concurrent observers remain
   independent. Stopping observation does not initiate, modify, or cancel bonding.
 
+- Add bounded Linux L2CAP syscall characterization with scripted success,
+  partial sends, EINTR/EAGAIN and failed-connect cases, allocation/fd accounting,
+  and killable watchdog children for persistent retry/receive loops. The internal
+  channel accepts an optional allocator (default `calloc`); socket behavior is
+  unchanged. Watchdog termination is failure characterization, not hardware proof.
+
 - Reject docs-site links that resolve outside the site root, including decoded
   traversal and symlink targets, while preserving internal parent-relative links.
 - Add hermetic docs-site, release-metadata and Linux consumer-construction
@@ -52,6 +58,7 @@
   deadline, bounded client-local abandonment, awaitable shutdown and observable
   cleanup errors. Cover deadlines, late events, switching and simulated client
   isolation with fake-clock tests; native connection behavior is unchanged.
+
 
 
 - Publish tagged example-app builds for Android, iOS Simulator, macOS, Linux
