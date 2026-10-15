@@ -150,6 +150,10 @@ The Documentation workflow runs these tests alongside OKF validation and a clean
 site build. Tests cover OKF structure, site links, release metadata and consumer
 construction. Headless graph/manifest tests reject Flutter SDK constraints,
 mixed repository snapshots and workspace roots while permitting plugin metadata.
+The external Git-consumer check isolates Flutter template bootstrap in a separate
+Pub cache, since a cold SDK can populate it even for `flutter create --no-pub`.
+The actual consumer cache must still be empty immediately before `pub get`;
+fixtures model template-cache writes and continue rejecting a dirty consumer cache.
 Site fixtures run the copied
 validator in normal and optimized subprocesses, checking navigation coverage and
 duplicates, rendered pages, anchors, missing targets, absolute/encoded project
