@@ -44,12 +44,12 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
   same-kind late completion. The broker's `isCurrentGatt` checks in
   `quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt`
   are inspection-only evidence here, not an executed old-GATT callback test.
-  Future corrective tests must require explicit settlement for dropped clients
-  and prove stale callbacks cannot settle replacement work at the identity gate
-  (instrumented) or a future identity-aware queue boundary. These are criteria,
-  not implemented fixes or a timer-based recovery policy. The start-throw path
+  A fix must settle dropped clients explicitly and include tests that
+  prove stale callbacks cannot settle replacement work at the identity gate
+  (instrumented) or an identity-aware queue boundary. These tests do not fix
+  the gaps or add timer-based recovery. The start-throw path
   remains untested: JVM `android.util.Log.e` is not mocked; covering it requires
-  separately coordinated injectable logging or Android test configuration.
+  injectable logging or Android test configuration.
 
 Do not add platform guarantees based on another platform's tests. Report hardware
 or host unavailability explicitly. Android bounded disconnect reconciliation is
