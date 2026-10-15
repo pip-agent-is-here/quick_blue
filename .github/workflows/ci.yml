@@ -18,7 +18,7 @@ permissions:
 env:
   FLUTTER_CHANNEL: stable
   # Keep in sync with the "tested with" row in quick_blue/README.md.
-  FLUTTER_VERSION: "3.47.6"
+  FLUTTER_VERSION: "3.47.7"
 
 # Runner override variables accept JSON. For example:
 # LINUX_RUNNER: ["self-hosted","linux","x64"]
@@ -127,7 +127,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
-          flutter-version: "3.44.2"
+          flutter-version: "3.47.7"
           cache: false
       - name: Resolve and verify declared minimum
         env:

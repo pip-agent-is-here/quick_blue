@@ -63,7 +63,7 @@ def check_consumer(package, snapshot, revision, fixture):
     # No workspace membership, path dependency, or direct hosted runtime deps.
     manifest = (
         "name: linux_consumer\npublish_to: none\n"
-        "environment:\n  sdk: ^3.12.2\n"
+        "environment:\n  sdk: ^3.13.5\n  flutter: '>=3.47.7'\n"
         "dependencies:\n  flutter:\n    sdk: flutter\n"
         + git_dependency(package, snapshot.as_uri(), revision)
         + "dependency_overrides:\n"

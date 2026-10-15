@@ -21,7 +21,7 @@ dependencies:
 
 dev_dependencies:
   test: ^1.26.0
-  # ffigen 22 requires meta ^1.19.0, incompatible with Flutter 3.44.2.
+  # Keep regeneration reproducible; this is not a runtime dependency.
   ffigen: 21.0.0
   lints: ^6.0.0
 

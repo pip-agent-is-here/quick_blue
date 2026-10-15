@@ -147,9 +147,13 @@ is still needed; this change does not disable validation or provide a hosted rel
 
 ## Requirements
 
-Dart 3.12.2 and Flutter 3.44.2 are the declared minimums, exercised by the
-minimum-toolchain Dart analysis/test lane. This does not establish native build
-or hardware compatibility at the minimum. See
+Flutter consumers now require Flutter 3.47.7 (bundled Dart 3.13.5); older Flutter
+releases are no longer supported. Upgrade the SDK before resolving this snapshot.
+CI pins both its primary and fresh-resolution minimum-toolchain lanes to 3.47.7.
+The pure-Dart packages retain their Dart 3.12.2 constraint and Flutter-free graph;
+standalone acceptance still uses a separately installed Dart 3.13 SDK. This
+support-policy change does not solve the publication metadata limit above or
+establish native or hardware compatibility. See
 [platform setup](platform-setup.md) for native requirements and
 [testing](testing.md) for the CI toolchain rather than treating minimums as proof
 of hardware verification.
