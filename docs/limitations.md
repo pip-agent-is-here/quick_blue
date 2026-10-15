@@ -35,18 +35,27 @@ reproduce these unresolved lifetime gaps with fake BlueZ objects:
 | `StartNotify` suspended until client release and clear finish | Teardown makes zero `StopNotify` calls; resumed setup installs a watch and emits initial `[0]` and later `[6]`. Later client release also makes zero calls with its cache cleared. |
 | Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Listener survives invalidation; release and clear make zero `StopNotify` calls and the fake stays notifying. Cache-intact control makes exactly one call and stops notifying. |
 
-Run from the repository root:
+Run the current regression suite from the repository root:
 
 ```sh
-(cd quick_blue_linux && flutter test test/gatt_session_test.dart \
-  --plain-name 'characterization:' --reporter expanded)
+(cd quick_blue_linux && flutter test test/gatt_session_test.dart --reporter expanded)
 ```
 
-The tests control ordering explicitly. A replacement is a new fake object at the
-same address, not a physical reconnect. Passing these assertions confirms the
-gaps still exist; it does not establish safe teardown, real BlueZ cleanup or
-D-Bus ownership release. Do not assume cancellation prevents late discovery
-events or releases native notification ownership.
+
+The one-shot `FutureGate` observes setup entry before teardown and explicitly
+releases it afterward; no sleep determines ordering. Replacement is a new fake
+BlueZ object at the same address, not a physical reconnect. Current regressions
+require cleared discovery to fail with `cancelled` without replacement-lifetime
+emissions, and late notification setup to release its claim without installing
+a watch or delivering values. These corrections are part of the headless Linux
+lifecycle implementation. Fake-BlueZ tests do not prove real BlueZ cleanup,
+D-Bus ownership release or hardware semantics.
+
+The cache-invalidated final-release gap remains characterized: release must
+eventually stop the old characteristic exactly once and remove its listener
+without re-resolution, but the current implementation still loses that native
+release when its characteristic cache has already been cleared.
+
 
 ## Verification gaps
 

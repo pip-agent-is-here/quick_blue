@@ -3,6 +3,21 @@
 - Restore workspace dependency resolution on the declared Flutter 3.44.2 /
   Dart 3.12.2 minimum by pinning development-only ffigen to 21.0.0.
 
+### Linux headless lifecycle
+
+- Add Linux `adapterAddress`, immutable `adapters()` snapshots and idempotent
+  `close()` for quiescent clients; retain first-powered defaults and never fall
+  back from an explicit selection. Release partial initialization resources,
+  canceled discovery waiters and late notification claims. Preserve primary
+  lease errors when cleanup also fails; fake contracts are not hardware proof.
+- Serialize notification setup and client StopNotify across device generations so retired cleanup
+  cannot stop a retry's claim. Scope device cache population and removal to the
+  selected adapter even when another adapter knows the same remote address.
+- Add opt-in `BluetoothGatt.boundCharacteristic()` through both facades. New
+  read/write/notification submissions reject invalid snapshots before platform
+  IO; existing `characteristic()` and direct-ID handles remain unbound.
+
+
 ### Changed
 
 - Extract the generic facade into `quick_blue_core`, sharing existing
