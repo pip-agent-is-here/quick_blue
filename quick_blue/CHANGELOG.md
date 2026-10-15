@@ -12,6 +12,13 @@
 
 ### Headless Linux
 
+- Scope connection leases by actual local adapter plus remote address. Preserve
+  same-adapter last-client cleanup while independently releasing connections to
+  the same peripheral through different adapters. Cooperating clients must use
+  matching revisions; legacy remote-only lease names do not interoperate.
+- Correct connection documentation to describe cancelled cleared discovery
+  waiters as implemented behavior, not the historical characterization gap.
+
 - Keep the CLI example compatible with the workspace's Dart 3.12.2 minimum and
   run standalone L2CAP watchdog children with the active SDK even off `PATH`.
 

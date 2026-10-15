@@ -37,6 +37,17 @@ CoreBluetooth; a preceding scan is not always necessary.
 
 ## Verification boundary
 
+Linux connection leases identify the actual local adapter and remote device
+address together. Two clients using the same adapter share the final-client
+disconnect rule (including default versus explicit selection); selecting a
+different adapter does not retain the first adapter's native connection. Use
+matching package revisions for cooperating clients: older remote-address-only
+lease namespaces do not coordinate with the corrected adapter-scoped namespace.
+`quick_blue_linux/test/adapter_lease_test.dart` exercises the real ownership
+coordinator and `quick_blue_linux/lib/src/dbus_connection_lease.dart`
+with a fake bus and BlueZ devices, including independent close and failed connect.
+These are not physical multi-adapter or cross-version interoperability tests.
+
 The repository has runtime multi-engine integration suites for Android and iOS.
 Linux, macOS and Windows ownership also have unit/native tests, but there is no
 matching hardware multi-engine integration suite for each of those targets.
