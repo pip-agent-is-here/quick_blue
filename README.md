@@ -1,9 +1,5 @@
 # quick_blue
 
-Local release identity/asset validation and opt-in Linux build-input capture are
-documented in [the verification playbook](docs/testing.md#local-release-validation-and-build-inputs).
-They do not attest signing, reproducibility, hardware behavior or publication.
-
 `quick_blue` is a federated Flutter plugin for Bluetooth Low Energy (BLE) on
 Android, iOS, macOS, Windows, and Linux.
 
@@ -52,6 +48,7 @@ the first error and adds no framing, automatic reassembly, or application ACKs.
 - [Package README](quick_blue/README.md)
 - [Changelog](quick_blue/CHANGELOG.md)
 - [Contributing and verification](CONTRIBUTING.md)
+- [Validate local releases and capture Linux build inputs](docs/testing.md#local-release-validation-and-build-inputs) - Check versions, asset hashes and local build records without publishing.
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
 
 ## Download the example app
