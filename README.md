@@ -34,7 +34,7 @@ do not test a physical Raspberry Pi or Bluetooth radio.
 
 On Android 17, security recovery passively coordinates with explicitly observed
 system-managed bond repair, including when Android retains the old bond. Android
-owns confirmation UI and key replacement; a bounded app wait is not a verdict
+owns confirmation UI and key replacement; an app timeout does not establish
 that system repair failed. Missing repair evidence retains conservative legacy
 behavior. See [pairing and security recovery](docs/pairing.md).
 
