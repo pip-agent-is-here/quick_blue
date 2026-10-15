@@ -9,6 +9,14 @@ and connection sharing across Flutter engines. Optional operations differ by
 platform; check [runtime capabilities](docs/capabilities.md) and
 [known limitations](docs/limitations.md) before relying on them.
 
+The generic facade now lives in pure-Dart `quick_blue_core`; Flutter imports
+remain unchanged. Linux services can combine core with `quick_blue_linux` and
+explicit registration without a Flutter SDK or engine. See the
+[local standalone migration and verification recipe](docs/install.md#standalone-dart-linux).
+Adapter selection, operator CLI and ARM64/hardware acceptance are separate work.
+
+
+
 ## Get started
 
 1. [Install from Git](docs/install.md), using the same revision for all federated
