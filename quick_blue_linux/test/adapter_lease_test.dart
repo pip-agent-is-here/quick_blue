@@ -8,6 +8,70 @@ import 'package:test/test.dart';
 import 'adapter_selection_test.dart' as fake;
 
 void main() {
+  for (final emit in [false, true]) {
+    for (final closePeer in [false, true]) {
+      test(
+        'failed cleanup restores real membership ($emit, $closePeer)',
+        () async {
+          await (() async {
+            final adapter = fake.Adapter('02:00:00:00:00:01');
+            const remote = '02:00:00:00:00:03';
+            final device = DisconnectEventDevice(adapter, remote)
+              ..connected = false
+              ..emit = emit;
+            addTearDown(device.events.close);
+            final owners = <String, String>{};
+            final client = fake.Client([adapter])..deviceList = [device];
+            addTearDown(client.removed.close);
+            final bus = UnlockBus(owners, ':1.1');
+            final a = QuickBlueLinux.withClient(
+              client,
+              connectionLease: DbusConnectionLease.withBus(bus),
+            );
+            addTearDown(a.close);
+            final b = platform(
+              [adapter],
+              [device],
+              adapter.address,
+              owners,
+              ':1.2',
+            );
+            await a.device(remote).connect();
+            final nameA = owners.keys.single;
+            bus.holdUnlock = true;
+            final disconnect = a
+                .device(remote)
+                .disconnect()
+                .then<Object?>((_) => null, onError: (Object error) => error);
+            await bus.entered.future;
+            await pumpEventQueue();
+            bus.proceed.complete();
+            expect((await disconnect).toString(), contains('unlock reply'));
+            expect(owners, isEmpty);
+            await a.device(remote).connect();
+            expect(owners[nameA], ':1.1');
+            await b.device(remote).connect();
+            final before = device.disconnects;
+            if (closePeer) {
+              await b.close();
+            } else {
+              await b.device(remote).disconnect();
+            }
+            await pumpEventQueue();
+            expect(device.connected, isTrue);
+            expect(device.disconnects, before);
+            expect(owners[nameA], ':1.1');
+            await a.close();
+            await b.close();
+            expect(device.connected, isFalse);
+            expect(device.disconnects, before + 1);
+            expect(owners, isEmpty);
+          })().timeout(const Duration(seconds: 5));
+          print('SCENARIO_COMPLETED');
+        },
+      );
+    }
+  }
   for (final facade in [false, true]) {
     for (final mode in ['late failure', 'no event', 'success']) {
       test('pending native detach stays coherent ($facade, $mode)', () async {

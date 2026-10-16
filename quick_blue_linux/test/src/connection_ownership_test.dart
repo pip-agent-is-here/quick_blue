@@ -4,6 +4,40 @@ import 'package:test/test.dart';
 import 'package:quick_blue_linux/src/connection_ownership.dart';
 
 void main() {
+  test(
+    'uncertain membership waits, propagates errors and retries original identity',
+    () async {
+      final lease = _FakeConnectionLease();
+      final ownership = ConnectionOwnership(lease);
+      await ownership.attach('device', leaseId: 'original/device');
+      lease.detachError = StateError('partial teardown');
+      await expectLater(
+        ownership.detach('device', onLastClient: () async {}),
+        throwsStateError,
+      );
+      lease.attachGate = Completer<void>();
+      var completed = false;
+      final retry = ownership
+          .attach('device', leaseId: 'replacement/device')
+          .then((_) {
+            completed = true;
+          });
+      await pumpEventQueue();
+      expect(completed, isFalse);
+      expect(ownership.owns('device'), isTrue);
+      final failure = expectLater(retry, throwsStateError);
+      lease.attachGate!.completeError(StateError('attach reply'));
+      await failure;
+      expect(completed, isFalse);
+      lease.attachGate = null;
+      await ownership.attach('device', leaseId: 'replacement/device');
+      await ownership.attach('device');
+      expect(lease.attachments, List.filled(3, 'original/device'));
+      lease.detachError = null;
+      await ownership.detach('device', onLastClient: () async {});
+      expect(ownership.deviceIds, isEmpty);
+    },
+  );
   for (final fail in [false, true]) {
     test(
       'pending detach joins reentry and gates attach (fail=$fail)',
@@ -133,12 +167,14 @@ class _FakeConnectionLease implements QuickBlueLinuxConnectionLease {
 
   final Object? attachError;
   Object? detachError;
+  Completer<void>? attachGate;
   final List<String> attachments = <String>[];
   final List<String> detachments = <String>[];
 
   @override
   Future<void> attach(String deviceId) async {
     attachments.add(deviceId);
+    await attachGate?.future;
     if (attachError case final error?) {
       throw error;
     }

@@ -10,6 +10,10 @@
 
 ### Headless Linux
 
+- Restore actual D-Bus Client membership before reconnect succeeds after failed
+  teardown; retained cleanup identity alone is not an active lease. Preserve
+  same-adapter peer disconnect/close protection, original native targets and
+  observable retry errors.
 - Coalesce reentrant connection detach until teardown settles, retaining native
   target and lease identity through late unlock failure. Reconcile an already
   disconnected native device on cleanup failure even without a property event,
