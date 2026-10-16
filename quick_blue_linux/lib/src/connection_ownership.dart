@@ -33,10 +33,17 @@ class ConnectionOwnership {
 
   bool owns(String deviceId) => _leaseIds.containsKey(deviceId);
 
-  Future<void> attach(String deviceId, {String? leaseId}) {
+  Future<void> attach(
+    String deviceId, {
+    String? leaseId,
+    bool Function()? isCurrent,
+  }) {
+    if (isCurrent != null && !isCurrent()) return Future<void>.value();
     final detaching = _detaching[deviceId];
     if (detaching != null) {
-      return detaching.then((_) => attach(deviceId, leaseId: leaseId));
+      return detaching.then(
+        (_) => attach(deviceId, leaseId: leaseId, isCurrent: isCurrent),
+      );
     }
     if (_leaseIds.containsKey(deviceId) &&
         !_membershipUncertain.contains(deviceId)) {
@@ -51,7 +58,7 @@ class ConnectionOwnership {
         completion: Future<void>.microtask(() => _attach(deviceId, identity)),
       );
     });
-    return _settleAttach(deviceId, pending);
+    return _settleAttach(deviceId, pending, isCurrent);
   }
 
   Future<void> _attach(String deviceId, String identity) async {
@@ -67,26 +74,35 @@ class ConnectionOwnership {
   Future<void> _settleAttach(
     String deviceId,
     ({String identity, Future<void> completion}) pending,
+    bool Function()? isCurrent,
   ) async {
     await pending.completion;
     // A native callback may request detach during registration. Detach waits
     // only for the raw lease operation, not this waiter (which would deadlock).
     // Its successful cleanup invalidates registration, so restore membership
     // before completing the original attach request. Errors remain observable.
-    await attach(deviceId, leaseId: pending.identity);
+    // Raw registration still records its identity for waiting detach cleanup.
+    // Only a live requester may restore membership after that detach settles.
+    await attach(deviceId, leaseId: pending.identity, isCurrent: isCurrent);
   }
 
   Future<void> detach(
     String deviceId, {
     required Future<void> Function() onLastClient,
+    void Function()? onStart,
   }) {
     if (!_leaseIds.containsKey(deviceId) && !_attaching.containsKey(deviceId)) {
       return Future<void>.value();
     }
     final attaching = _attaching[deviceId]?.completion;
-    return _detaching[deviceId] ??= Future<void>.microtask(
-      () => _detach(deviceId, attaching, onLastClient),
-    );
+    return _detaching.putIfAbsent(deviceId, () {
+      // Reentrant callbacks join cleanup; they must not retire a connect that
+      // is already waiting for this same teardown to finish.
+      onStart?.call();
+      return Future<void>.microtask(
+        () => _detach(deviceId, attaching, onLastClient),
+      );
+    });
   }
 
   Future<void> _detach(

@@ -140,7 +140,11 @@ it. Source paths: `quick_blue_linux/lib/quick_blue_linux.dart` and
 
 Caller cancellation still stops only that caller's wait. A connect completing
 late retains the client lease until explicit disconnect; an immediate retry
-joins it.
+without detach joins it. Explicit disconnect supersedes that pending connect.
+A fresh reconnect after detach must reacquire actual membership and a native
+target, not join a retired native Connect reply. Late success/error cannot alter
+the replacement connection; this is lifetime retirement, not native abort.
+See the [Linux ownership regression boundary](multi-engine.md#verification-boundary).
 Clearing device state cancels pending discovery waits, and a late notification
 setup releases its native claim without installing a watch. Notification setup
 and disable requests for the same characteristic are serialized across clears:

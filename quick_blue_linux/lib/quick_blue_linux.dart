@@ -420,22 +420,40 @@ class QuickBlueLinux extends QuickBluePlatform {
   @override
   Future<void> connect(String deviceId) async {
     await _ensureInitialized();
-    await (_connecting[deviceId] ??= Future<void>.microtask(() async {
+    final existing = _connecting[deviceId];
+    if (existing != null) return existing;
+    late final Future<void> pending;
+    bool isCurrent() => identical(_connecting[deviceId], pending);
+    pending = Future<void>.microtask(() async {
       try {
-        await _connect(deviceId);
+        await _connect(deviceId, isCurrent);
       } finally {
-        _connecting.remove(deviceId);
+        // A retired native reply must not remove a replacement connect.
+        if (isCurrent()) _connecting.remove(deviceId);
       }
-    }));
+    });
+    _connecting[deviceId] = pending;
+    await pending;
   }
 
-  Future<void> _connect(String deviceId) async {
+  Future<void> _connect(String deviceId, bool Function() isCurrent) async {
     final device = _getDeviceOrThrow(deviceId);
+    void checkCurrent() {
+      if (!isCurrent()) {
+        throw QuickBlueException(
+          code: QuickBlueErrorCode.cancelled,
+          operation: 'connect',
+          deviceId: deviceId,
+          message: 'The connection request was superseded by detach.',
+        );
+      }
+    }
 
     // This observer belongs to the previous connection. Retire it before lease
     // registration/native connect can suspend, so a delayed disconnected event
     // cannot release the new membership. In-flight detach is joined by attach.
     await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
+    checkCurrent();
 
     // Capture the actual BlueZ adapter, including for default selection. Retain
     // this identity through detach even if the cached device is later replaced.
@@ -443,13 +461,14 @@ class QuickBlueLinux extends QuickBluePlatform {
       await _connectionOwnership.attach(
         deviceId,
         leaseId: '${device.adapter.address}/$deviceId',
+        isCurrent: isCurrent,
       );
     } catch (error, stackTrace) {
       // Failed reattach retains the cleanup target. Keep observing it for a
       // later spontaneous disconnect, without hiding the registration error.
-      if (_connectionOwnership.owns(deviceId)) {
+      if (isCurrent() && _connectionOwnership.owns(deviceId)) {
         try {
-          await _watchDeviceProperties(device);
+          await _watchDeviceProperties(device, checkCurrent: checkCurrent);
         } catch (watchError, watchStack) {
           _logger.warning(
             'Unable to restore device observer',
@@ -460,18 +479,27 @@ class QuickBlueLinux extends QuickBluePlatform {
       }
       Error.throwWithStackTrace(error, stackTrace);
     }
+    checkCurrent();
     _ownedDevices.putIfAbsent(deviceId, () => device);
 
     try {
-      await _ensureConnectedDevice(device);
+      await _ensureConnectedDevice(device, checkCurrent: checkCurrent);
+      checkCurrent();
       _emitConnectionState(
         deviceId,
         BlueConnectionState.connected,
         BleStatus.success,
       );
     } on Object catch (error, stackTrace) {
+      // Supersession does not abort the submitted native call. Its eventual
+      // error still belongs to its caller, not the replacement's ownership.
+      if (!isCurrent()) rethrow;
       try {
-        await _detachDevice(device, onLastClient: () async {});
+        await _detachDevice(
+          device,
+          onLastClient: () async {},
+          retireConnect: false,
+        );
       } on Object catch (releaseError, releaseStackTrace) {
         _logger.warning(
           'Failed to release the connection lease for $deviceId',
@@ -480,11 +508,13 @@ class QuickBlueLinux extends QuickBluePlatform {
         );
       }
       _logger.severe('Failed to connect to $deviceId', error, stackTrace);
-      _emitConnectionState(
-        deviceId,
-        BlueConnectionState.disconnected,
-        BleStatus.failure,
-      );
+      if (isCurrent()) {
+        _emitConnectionState(
+          deviceId,
+          BlueConnectionState.disconnected,
+          BleStatus.failure,
+        );
+      }
       rethrow;
     }
   }
@@ -711,19 +741,30 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> _detachDevice(
     BlueZDevice device, {
     required Future<void> Function() onLastClient,
+    bool retireConnect = true,
   }) async {
     final deviceId = device.address;
     if (!identical(_ownedDevices[deviceId], device)) return;
-    await _connectionOwnership.detach(deviceId, onLastClient: onLastClient);
+    // A fresh connect must acquire membership, even if the retired native
+    // Connect reply is still outstanding. Failed detach remains retryable too.
+    await _connectionOwnership.detach(
+      deviceId,
+      onLastClient: onLastClient,
+      onStart: retireConnect ? () => _connecting.remove(deviceId) : null,
+    );
     if (!_connectionOwnership.owns(deviceId) &&
         identical(_ownedDevices[deviceId], device)) {
       _ownedDevices.remove(deviceId);
     }
   }
 
-  Future<void> _ensureConnectedDevice(BlueZDevice device) async {
+  Future<void> _ensureConnectedDevice(
+    BlueZDevice device, {
+    void Function()? checkCurrent,
+  }) async {
+    checkCurrent?.call();
     if (device.connected) {
-      await _watchDeviceProperties(device);
+      await _watchDeviceProperties(device, checkCurrent: checkCurrent);
       return;
     }
 
@@ -732,16 +773,24 @@ class QuickBlueLinux extends QuickBluePlatform {
     } on BlueZAlreadyConnectedException {
       // Already connected, nothing to do.
     } on BlueZInProgressException {
+      checkCurrent?.call();
       await _waitForConnected(device);
     }
 
+    checkCurrent?.call();
     await _waitForConnected(device);
-    await _watchDeviceProperties(device);
+    checkCurrent?.call();
+    await _watchDeviceProperties(device, checkCurrent: checkCurrent);
   }
 
-  Future<void> _watchDeviceProperties(BlueZDevice device) async {
+  Future<void> _watchDeviceProperties(
+    BlueZDevice device, {
+    void Function()? checkCurrent,
+  }) async {
     final deviceId = device.address;
+    checkCurrent?.call();
     await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
+    checkCurrent?.call();
     _gattSession.watchDevice(device);
 
     final subscription = device.propertiesChanged.listen(
