@@ -10,6 +10,11 @@
 
 ### Headless Linux
 
+- Gate reconnect on the complete explicit disconnect before StopNotify can
+  suspend, through lease release and old state/observer cleanup. Preserve newer
+  reconnect intent and native-event coalescing during notification release;
+  joining facade disconnects receive terminal state after cleanup. Keep logged
+  notification errors and observable failed-teardown/retry behavior.
 - Retire older queued reconnect intent on every explicit disconnect, even when
   joining an existing teardown. Preserve intentionally newer reconnects and
   native-event cleanup coalescing, failed-cleanup retry and visible errors.

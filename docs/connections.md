@@ -112,6 +112,12 @@ A new explicit disconnect also retires a reconnect queued behind an earlier
 teardown, even when both disconnects join that cleanup. A reconnect requested
 after the new disconnect remains intentional; old native-event cleanup does not
 retire it merely by joining the same teardown.
+Linux exposes the entire explicit disconnect as pending before notification
+release can suspend. A newer connect waits for StopNotify, lease detach and old
+state/observer cleanup before selecting its native target and acquiring membership.
+Native events during that release join the same transition; a joining facade
+disconnect still receives terminal state after cleanup. Failed teardown remains
+observable to waiting platform requests and retryable, not a successful reconnect.
 See the [Linux ownership regression boundary](multi-engine.md#verification-boundary).
 Clearing device state cancels pending discovery waits, and a late notification
 setup releases its native claim without installing a watch. Notification setup

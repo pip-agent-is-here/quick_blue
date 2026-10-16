@@ -171,6 +171,9 @@ class QuickBlueLinux extends QuickBluePlatform {
   // Native targets follow the held lease, not the refreshable discovery cache.
   final Map<String, BlueZDevice> _ownedDevices = <String, BlueZDevice>{};
   final Map<String, Future<void>> _connecting = <String, Future<void>>{};
+  // Explicit disconnect includes notification release and state cleanup, not
+  // just the lease detach (which native callbacks may independently reenter).
+  final Map<String, Future<void>> _disconnecting = <String, Future<void>>{};
   final _DevicePropertySubscriptions _devicePropertySubscriptions =
       <String, _BlueZPropertySubscription>{};
   final Map<String, bool> _lastConnectionState = <String, bool>{};
@@ -437,7 +440,6 @@ class QuickBlueLinux extends QuickBluePlatform {
   }
 
   Future<void> _connect(String deviceId, bool Function() isCurrent) async {
-    final device = _getDeviceOrThrow(deviceId);
     void checkCurrent() {
       if (!isCurrent()) {
         throw QuickBlueException(
@@ -448,6 +450,12 @@ class QuickBlueLinux extends QuickBluePlatform {
         );
       }
     }
+
+    // Settle the whole old transition before selecting a target or touching
+    // observers: a held StopNotify or late clear must not destroy a newer link.
+    await _disconnecting[deviceId];
+    checkCurrent();
+    final device = _getDeviceOrThrow(deviceId);
 
     // This observer belongs to the previous connection. Retire it before lease
     // registration/native connect can suspend, so a delayed disconnected event
@@ -523,7 +531,8 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> disconnect(String deviceId) async {
     // Shutdown may detach already-owned devices after closing the public gate.
     if (!_closed) await _ensureInitialized();
-    if (!_connectionOwnership.owns(deviceId)) {
+    if (!_connectionOwnership.owns(deviceId) &&
+        !_disconnecting.containsKey(deviceId)) {
       throw QuickBlueException(
         code: QuickBlueErrorCode.invalidState,
         operation: 'disconnect',
@@ -536,7 +545,20 @@ class QuickBlueLinux extends QuickBluePlatform {
     // a later reconnect may intentionally wait for that same teardown.
     _connecting.remove(deviceId);
     final device = _getDeviceOrThrow(deviceId);
+    await _disconnecting.putIfAbsent(
+      deviceId,
+      () => Future<void>.microtask(() => _disconnect(deviceId, device)),
+    );
+    // A joining facade request may have subscribed after the native event.
+    // Publish completion after clear, before waiting reconnects can emit state.
+    _emitConnectionState(
+      deviceId,
+      BlueConnectionState.disconnected,
+      BleStatus.success,
+    );
+  }
 
+  Future<void> _disconnect(String deviceId, BlueZDevice device) async {
     try {
       await _gattSession.stopNotificationsForClient(deviceId);
       await runDisconnectRequest(deviceId, () async {
@@ -553,11 +575,6 @@ class QuickBlueLinux extends QuickBluePlatform {
         );
       });
 
-      _emitConnectionState(
-        deviceId,
-        BlueConnectionState.disconnected,
-        BleStatus.success,
-      );
       await _clearDeviceState(deviceId, removeDevice: false);
     } on Object catch (error, stackTrace) {
       _logger.severe('Failed to disconnect from $deviceId', error, stackTrace);
@@ -572,6 +589,8 @@ class QuickBlueLinux extends QuickBluePlatform {
         );
       }
       rethrow;
+    } finally {
+      _disconnecting.remove(deviceId);
     }
   }
 
@@ -749,6 +768,10 @@ class QuickBlueLinux extends QuickBluePlatform {
     bool retireConnect = true,
   }) async {
     final deviceId = device.address;
+    // Native events join the complete explicit transition, including a pending
+    // StopNotify. They must not retire a reconnect waiting behind that cleanup.
+    final disconnecting = _disconnecting[deviceId];
+    if (retireConnect && disconnecting != null) return disconnecting;
     if (!identical(_ownedDevices[deviceId], device)) return;
     // A fresh connect must acquire membership, even if the retired native
     // Connect reply is still outstanding. Failed detach remains retryable too.

@@ -65,6 +65,10 @@ Every explicit disconnect retires the connect intent preceding it, including a
 reconnect waiting behind an already-pending detach. This happens before cleanup
 suspends, not only when creating a new detach. Later reconnects may still wait
 for the old cleanup; reentrant native events joining it do not cancel them.
+The explicit transition includes notification release and final state/observer
+cleanup, not just D-Bus lease detach. It is visible before StopNotify suspends,
+so a newer connect cannot reuse membership that the older disconnect will remove.
+Native events during notification release join this full transition too.
 Reconnect retires the preceding native property observer before registration
 and native connect can suspend, so a delayed old disconnect event cannot remove
 the new membership. Concurrent connects in the same ownership lifetime share
@@ -109,6 +113,12 @@ It also holds successful/failed final unlock replies while reconnect and a newer
 explicit disconnect overlap through public calls. Tests assert actual membership,
 native state, pending-reply behavior, newer/duplicate reconnect controls, failed
 cleanup retry, peer protection and complete final name cleanup.
+`quick_blue_linux/test/notification_disconnect_test.dart` holds StopNotify through
+public facade/direct disconnect/reconnect, with native events and no-event
+controls. It checks settled/no-reconnect, duplicate and newer/final intent,
+late StopNotify errors (logged), failed unlock/retry, native events during the
+held release, restored notification watches, peer disconnect/close protection and
+complete Client/Lock/native/subscription cleanup under a five-second watchdog.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.
