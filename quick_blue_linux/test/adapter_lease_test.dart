@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dbus/dbus.dart';
 import 'package:quick_blue_linux/quick_blue_linux.dart';
 import 'package:quick_blue_linux/src/connection_lease.dart';
@@ -6,6 +8,40 @@ import 'package:test/test.dart';
 import 'adapter_selection_test.dart' as fake;
 
 void main() {
+  for (final closeOnly in [false, true]) {
+    test(
+      'default cache replacement retains native owner (closeOnly=$closeOnly)',
+      () async {
+        final a = fake.Adapter('02:00:00:00:00:01');
+        final b = fake.Adapter('02:00:00:00:00:02');
+        const remote = '02:00:00:00:00:03';
+        final da = fake.Device(a, remote)..connected = false;
+        final db = fake.Device(b, remote)..connected = false;
+        final owners = <String, String>{};
+        final devices = [da];
+        final pa = platform([a, b], devices, null, owners, ':1.1');
+        final pb = platform([a, b], [db], b.address, owners, ':1.2');
+        await pa.device(remote).connect();
+        await pb.device(remote).connect();
+        devices.add(db);
+        await pa.connectedDevices();
+        if (closeOnly) {
+          await pa.close();
+        } else {
+          await pa.device(remote).disconnect();
+        }
+        expect(da.disconnects, 1);
+        expect(da.connected, isFalse);
+        expect(db.disconnects, 0);
+        expect(db.connected, isTrue);
+        expect(owners.length, 1);
+        await pa.close();
+        await pb.close();
+        expect(db.disconnects, 1);
+        expect(owners, isEmpty);
+      },
+    );
+  }
   for (final closeOnly in [false, true]) {
     test(
       'different adapters release independently (closeOnly=$closeOnly)',
@@ -82,6 +118,138 @@ void main() {
     expect(da.disconnects, 1);
     expect(owners, isEmpty);
   });
+
+  test(
+    'failed detach keeps original native target through cache replacement',
+    () async {
+      final a = fake.Adapter('02:00:00:00:00:01');
+      final b = fake.Adapter('02:00:00:00:00:02');
+      const remote = '02:00:00:00:00:03';
+      final da = fake.Device(a, remote)..connected = false;
+      final db = fake.Device(b, remote)..connected = false;
+      final owners = <String, String>{};
+      final devices = [da];
+      final client = fake.Client([a, b])..deviceList = devices;
+      addTearDown(client.removed.close);
+      final bus = RetryBus(owners, ':1.1');
+      final pa = QuickBlueLinux.withClient(
+        client,
+        connectionLease: DbusConnectionLease.withBus(bus),
+      );
+      addTearDown(pa.close);
+      final pb = platform([a, b], [db], b.address, owners, ':1.2');
+      await pa.connect(remote);
+      await pb.connect(remote);
+      devices.add(db);
+      await pa.connectedDevices();
+      bus.failRelease = true;
+      await expectLater(pa.disconnect(remote), throwsStateError);
+      expect(owners.length, 2);
+      expect(da.connected, isTrue);
+      expect(db.connected, isTrue);
+      await pa.connect(remote);
+      await pa.disconnect(remote);
+      expect(da.disconnects, 1);
+      expect(db.disconnects, 0);
+      await pa.close();
+      await pb.close();
+      expect(owners, isEmpty);
+    },
+  );
+
+  test(
+    'spontaneous release retires target before retry on replacement',
+    () async {
+      final a = fake.Adapter('02:00:00:00:00:01');
+      final b = fake.Adapter('02:00:00:00:00:02');
+      const remote = '02:00:00:00:00:03';
+      final da = EventDevice(a, remote)..connected = false;
+      final db = EventDevice(b, remote)..connected = false;
+      addTearDown(da.events.close);
+      addTearDown(db.events.close);
+      final owners = <String, String>{};
+      final devices = <fake.Device>[da];
+      final client = fake.Client([a, b])..deviceList = devices;
+      addTearDown(client.removed.close);
+      final pa = QuickBlueLinux.withClient(
+        client,
+        connectionLease: DbusConnectionLease.withBus(Bus(owners, ':1.1')),
+      );
+      addTearDown(pa.close);
+      final pb = platform([a, b], [db], b.address, owners, ':1.2');
+      await pa.connect(remote);
+      await pb.connect(remote);
+      devices.add(db);
+      await pa.connectedDevices();
+      da.connected = false;
+      // Foreign removal must not cancel A's property observer.
+      client.removed.add(db);
+      await pumpEventQueue();
+      da.events.add(['Connected']);
+      await pumpEventQueue();
+      expect(owners.length, 1);
+      expect(db.connected, isTrue);
+      await pa.connect(remote);
+      expect(owners.length, 2);
+      expect(da.connects, 1);
+      da.events.add(['Connected']);
+      await pumpEventQueue();
+      expect(owners.length, 2);
+      await pa.close();
+      expect(db.connected, isTrue);
+      expect(db.disconnects, 0);
+      await pb.close();
+      expect(db.disconnects, 1);
+      expect(owners, isEmpty);
+    },
+  );
+  test(
+    'failed default connect retires target before replacement retry',
+    () async {
+      final a = fake.Adapter('02:00:00:00:00:01');
+      final b = fake.Adapter('02:00:00:00:00:02');
+      const remote = '02:00:00:00:00:03';
+      final da = FailingDevice(a, remote)..connected = false;
+      final db = fake.Device(b, remote)..connected = false;
+      final owners = <String, String>{};
+      final devices = <fake.Device>[da];
+      final pa = platform([a, b], devices, null, owners, ':1.1');
+      final pb = platform([a, b], [db], b.address, owners, ':1.2');
+      await pb.connect(remote);
+      await expectLater(pa.connect(remote), throwsStateError);
+      expect(owners.length, 1);
+      devices.add(db);
+      await pa.connectedDevices();
+      await pa.connect(remote);
+      expect(owners.length, 2);
+      await pa.close();
+      expect(db.connected, isTrue);
+      expect(db.disconnects, 0);
+      await pb.close();
+      expect(db.disconnects, 1);
+      expect(owners, isEmpty);
+    },
+  );
+}
+
+class EventDevice extends fake.Device {
+  EventDevice(super.adapter, super.remoteAddress);
+  final events = StreamController<List<String>>.broadcast();
+  @override
+  Stream<List<String>> get propertiesChanged => events.stream;
+}
+
+class RetryBus extends Bus {
+  RetryBus(super.owners, super.uniqueName);
+  bool failRelease = false;
+  @override
+  Future<void> releaseName(String name) async {
+    if (failRelease) {
+      failRelease = false;
+      throw StateError('release');
+    }
+    await super.releaseName(name);
+  }
 }
 
 QuickBlueLinux platform(

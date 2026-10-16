@@ -168,6 +168,8 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   // Cached BlueZ objects and active subscriptions.
   final Map<String, BlueZDevice> _devices = <String, BlueZDevice>{};
+  // Native targets follow the held lease, not the refreshable discovery cache.
+  final Map<String, BlueZDevice> _ownedDevices = <String, BlueZDevice>{};
   final _DevicePropertySubscriptions _devicePropertySubscriptions =
       <String, _BlueZPropertySubscription>{};
   final Map<String, bool> _lastConnectionState = <String, bool>{};
@@ -377,6 +379,8 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   void _onDeviceRemoved(BlueZDevice device) {
     if (!_matchesAdapter(device)) return;
+    final owned = _ownedDevices[device.address];
+    if (owned != null && !identical(owned, device)) return;
     _observeBackgroundOperation(
       _clearDeviceState(device.address, removeDevice: true),
       'Unable to clear removed device ${device.address}',
@@ -423,6 +427,7 @@ class QuickBlueLinux extends QuickBluePlatform {
       deviceId,
       leaseId: '${device.adapter.address}/$deviceId',
     );
+    _ownedDevices.putIfAbsent(deviceId, () => device);
 
     try {
       await _ensureConnectedDevice(device);
@@ -433,7 +438,7 @@ class QuickBlueLinux extends QuickBluePlatform {
       );
     } on Object catch (error, stackTrace) {
       try {
-        await _connectionOwnership.detach(deviceId, onLastClient: () async {});
+        await _detachDevice(device, onLastClient: () async {});
       } on Object catch (releaseError, releaseStackTrace) {
         _logger.warning(
           'Failed to release the connection lease for $deviceId',
@@ -468,8 +473,8 @@ class QuickBlueLinux extends QuickBluePlatform {
     try {
       await _gattSession.stopNotificationsForClient(deviceId);
       await runDisconnectRequest(deviceId, () async {
-        await _connectionOwnership.detach(
-          deviceId,
+        await _detachDevice(
+          device,
           onLastClient: () async {
             try {
               await device.disconnect();
@@ -639,6 +644,7 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   BlueZDevice _getDeviceOrThrow(String deviceId, {String? operation}) {
     final device =
+        _ownedDevices[deviceId] ??
         _devices[deviceId] ??
         _client.devices.firstWhereOrNull(
           (d) => d.address == deviceId && _matchesAdapter(d),
@@ -658,6 +664,19 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   bool _matchesAdapter(BlueZDevice device) =>
       adapterAddress == null || device.adapter.address == adapterAddress;
+
+  Future<void> _detachDevice(
+    BlueZDevice device, {
+    required Future<void> Function() onLastClient,
+  }) async {
+    final deviceId = device.address;
+    if (!identical(_ownedDevices[deviceId], device)) return;
+    await _connectionOwnership.detach(deviceId, onLastClient: onLastClient);
+    if (!_connectionOwnership.owns(deviceId) &&
+        identical(_ownedDevices[deviceId], device)) {
+      _ownedDevices.remove(deviceId);
+    }
+  }
 
   Future<void> _ensureConnectedDevice(BlueZDevice device) async {
     if (device.connected) {
@@ -684,6 +703,8 @@ class QuickBlueLinux extends QuickBluePlatform {
 
     final subscription = device.propertiesChanged.listen(
       (properties) {
+        final owned = _ownedDevices[deviceId];
+        if (owned != null && !identical(owned, device)) return;
         if (properties.contains('Connected')) {
           final state = device.connected
               ? BlueConnectionState.connected
@@ -691,7 +712,7 @@ class QuickBlueLinux extends QuickBluePlatform {
           _emitConnectionState(deviceId, state, BleStatus.success);
           if (!device.connected) {
             _observeBackgroundOperation(
-              _connectionOwnership.detach(deviceId, onLastClient: () async {}),
+              _detachDevice(device, onLastClient: () async {}),
               'Unable to detach the connection client for $deviceId',
             );
             _observeBackgroundOperation(
