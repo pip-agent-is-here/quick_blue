@@ -18,6 +18,7 @@ class ConnectionOwnership {
 
   final QuickBlueLinuxConnectionLease _lease;
   final Map<String, String> _leaseIds = <String, String>{};
+  final Map<String, Future<void>> _detaching = <String, Future<void>>{};
 
   List<String> get deviceIds => List.unmodifiable(_leaseIds.keys);
 
@@ -30,6 +31,7 @@ class ConnectionOwnership {
   bool owns(String deviceId) => _leaseIds.containsKey(deviceId);
 
   Future<void> attach(String deviceId, {String? leaseId}) async {
+    await _detaching[deviceId];
     if (_leaseIds.containsKey(deviceId)) {
       return;
     }
@@ -41,16 +43,25 @@ class ConnectionOwnership {
   Future<void> detach(
     String deviceId, {
     required Future<void> Function() onLastClient,
-  }) async {
-    final identity = _leaseIds.remove(deviceId);
-    if (identity == null) {
-      return;
-    }
+  }) {
+    if (!_leaseIds.containsKey(deviceId)) return Future<void>.value();
+    return _detaching[deviceId] ??= Future<void>.microtask(
+      () => _detach(deviceId, onLastClient),
+    );
+  }
+
+  Future<void> _detach(
+    String deviceId,
+    Future<void> Function() onLastClient,
+  ) async {
+    // Keep identity visible until teardown settles. Native disconnect events
+    // can reenter detach while the final D-Bus unlock reply is still pending.
+    final identity = _leaseIds[deviceId]!;
     try {
       await _lease.detach(identity, onLastClient);
-    } catch (_) {
-      _leaseIds[deviceId] = identity;
-      rethrow;
+      _leaseIds.remove(deviceId);
+    } finally {
+      _detaching.remove(deviceId);
     }
   }
 }
