@@ -10,6 +10,12 @@
 
 ### Headless Linux
 
+- Limit pending native-connect coalescing to its ownership lifetime. Explicit
+  detach retires that request; reconnect reacquires actual Client membership and
+  its native target without awaiting the retired reply. Late success/error cannot
+  emit replacement state, replace its observer, release its lease or remove its
+  pending connect. Preserve duplicate coalescing, failed-detach retry and native
+  error visibility; retired registration cannot resurrect membership on cleanup.
 - Coordinate pending attach with native-event detach and coalesce concurrent
   connects. Retire the preceding native observer before reconnect registration
   and native connect suspend; do not report successful membership after an

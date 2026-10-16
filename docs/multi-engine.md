@@ -57,15 +57,25 @@ observable and do not discard the retained cleanup target.
 Same-client registration and detach operations are coordinated locally as well
 as through the existing D-Bus lock: `alreadyOwner` is not mutual exclusion on
 one bus connection. Duplicate pending attaches share registration; an intervening
-detach must settle and membership must be restored before attach succeeds.
+detach must settle and membership must be restored before a still-live attach
+succeeds. Explicit detach retires its pending connect requester; completing raw
+registration still records the identity needed for cleanup, but cannot resurrect
+that retired request after teardown.
 Reconnect retires the preceding native property observer before registration
 and native connect can suspend, so a delayed old disconnect event cannot remove
-the new membership. Concurrent connects share that transition; failed reattach
+the new membership. Concurrent connects in the same ownership lifetime share
+that transition. After explicit detach, a fresh connect acquires membership and
+its native target again even when an older native Connect reply is outstanding.
+The old reply cannot emit state, replace the new observer, release the new lease
+or remove a pending replacement connect. A retired native success reports
+supersession; its native error remains visible to its original platform caller.
+This does not abort native work. Failed reattach
 restores observation of a retained cleanup target and preserves its primary error.
 Registration errors attempt to release potentially granted Client/Lock names
 even if the successful bus reply was lost. Cleanup failures remain observable
-or logged alongside the primary error; a missing reply is still pending, not a
-successful connection or an implicit native-abort deadline.
+or logged alongside the primary error; a request with a missing reply remains
+pending, not successful or implicitly aborted. A replacement lifetime need not
+wait for that retired native reply once its own membership/native state is ready.
 Spontaneous disconnect releases the target before a later connection can select
 a replacement.
 Use matching package revisions for cooperating clients: older remote-address-only
@@ -85,6 +95,12 @@ checks peer disconnect/close, duplicate initial/retry connects, rejected/error
 replies, retry and complete name cleanup. It also holds native reconnect itself
 after registration. Ownership tests exercise synchronous and microtask callbacks
 during registration without awaiting their own attach waiter.
+`quick_blue_linux/test/connect_transition_test.dart` holds native Connect replies
+after connected state, explicitly detaches/reconnects through facade and platform
+paths, and checks actual Client names, peer disconnect/close protection, stale
+success/error, pending replacement coalescing, adapter replacement and full
+cleanup. Same-lifetime duplicates and settled replies remain controls; explicit
+detach during pending re-registration must not resurrect retired membership.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.
