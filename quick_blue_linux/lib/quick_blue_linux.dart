@@ -898,10 +898,13 @@ class QuickBlueLinux extends QuickBluePlatform {
       _devices.remove(deviceId);
     }
 
-    _lastConnectionState.remove(deviceId);
     await _gattSession.clearDevice(deviceId);
     await _scanSession.removeDevice(deviceId);
     await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
+    // The native observer can emit while earlier cleanup is suspended. Forget
+    // its state only after it is retired, so terminal disconnect replay cannot
+    // be suppressed for a facade request that joined after that native event.
+    _lastConnectionState.remove(deviceId);
   }
 
   Future<void> _cancelMappedSubscription<T>(

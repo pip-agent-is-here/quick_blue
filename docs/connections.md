@@ -151,8 +151,11 @@ retire it merely by joining the same teardown.
 Linux exposes the entire explicit disconnect as pending before notification
 release can suspend. A newer connect waits for StopNotify, lease detach and old
 state/observer cleanup before selecting its native target and acquiring membership.
-Native events during that release join the same transition; a joining facade
-disconnect still receives terminal state after cleanup. Failed teardown remains
+Native events during that release join the same transition. Only after GATT,
+scan and native-observer cleanup settle is the old state deduplication cache
+retired, so an earlier native event cannot suppress terminal state for a joining
+facade disconnect. Completion remains ordered before a waiting newer connect.
+Failed teardown remains
 observable to waiting platform requests and retryable, not a successful reconnect.
 See the [Linux ownership regression boundary](multi-engine.md#verification-boundary).
 Clearing device state cancels pending discovery waits, and a late notification

@@ -119,6 +119,14 @@ controls. It checks settled/no-reconnect, duplicate and newer/final intent,
 late StopNotify errors (logged), failed unlock/retry, native events during the
 held release, restored notification watches, peer disconnect/close protection and
 complete Client/Lock/native/subscription cleanup under a five-second watchdog.
+`quick_blue_linux/test/clear_disconnect_test.dart` also holds asynchronous
+subscription cancellation at each final-clear boundary (GATT, scan and native
+observer). Delayed native events before/after the joining listener, direct/facade
+and duplicate final disconnects, intentionally newer reconnects and cleanup-error
+retry retain terminal completion, actual membership and peer protection. The
+underlying subscription is cancelled before its cleanup reply is held; events
+are not delivered to a cancelled observer. All scenarios assert no leaked names,
+native connections or listeners before closing the fake event controllers.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.
