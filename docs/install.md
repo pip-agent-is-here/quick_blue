@@ -121,8 +121,9 @@ containing these packages.
 The public Linux CLI (`quick_blue_linux/example/`, repository-relative) is copied by
 `scripts/check-headless-consumer.py` into a retained external `cli/` directory,
 with matched core/interface/Linux sources and explicit path overrides.
-The CLI example shares the workspace's Dart 3.12.2 minimum; the standalone
-acceptance fixture deliberately uses Dart 3.13. The example's three direct
+The pure-Dart CLI example retains a Dart 3.12.2 package constraint; the Flutter
+workspace requires Flutter 3.47.7 with bundled Dart 3.13.5. The standalone
+verification fixture uses Dart 3.13. The example's three direct
 dependencies are core, Linux and platform interface;
 `test` is development-only. Runtime dependency closure is the same as above.
 The verifier checks this CLI's graph/manifests too, runs `dart analyze` and

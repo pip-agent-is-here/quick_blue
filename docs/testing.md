@@ -101,9 +101,9 @@ The script removes display and host loader variables and supplies guest library
 search paths. It runs help, the fake flow and a glibc/libbluetooth symbol probe.
 No Bluetooth socket, agent or system bus is opened by those runtime checks.
 
-Help, fake flow and library loading have been tested with Dart 3.13.5,
-QEMU 10.0.13 and Debian 13 ARM64 libraries. Other distributions and physical
-hardware remain untested. Retain source hashes, package versions, ELF dependencies
+For a reproducible emulator environment, use Dart 3.13.5, QEMU 10.0.13 and
+Debian 13 ARM64 libraries. Emulator checks do not establish compatibility with
+other distributions or physical hardware. Retain source hashes, package versions, ELF dependencies
 and execution logs as CI or review artifacts. See
 [ARM64 runtime requirements](platform-setup.md#arm64-linux-runtime) and
 [hardware boundaries](limitations.md#headless-proof-boundaries).
@@ -383,6 +383,9 @@ test inputs or curated stable baselines, not an unfiltered execution dump.
 
 ### Linux deterministic lifecycle matrix
 
+These are checked-in regression assertions, not a record of a run on a particular
+revision. Record actual commands, revision and results separately.
+
 Run `dart test` in the isolated Linux copy created by the standalone consumer
 check. `test/lifecycle_cleanup_test.dart` covers caller cancellation before
 start, during lease acquisition and during native connect, delayed completion,
@@ -423,6 +426,8 @@ The five-second scenario watchdog is a test bound, not a production abort timeou
 D-Bus owners and last-client serialization; adapter tests retain first-powered
 defaults and missing/unpowered/removed explicit selections. Watchdogs bound
 pending regression futures. None of these tests accesses Bluetooth hardware.
+
+### Archive existing raw evidence before removal
 
 Before removing existing tracked raw evidence, archive the originals durably,
 read the stored attachment/artifact back and verify its hashes against the originals.

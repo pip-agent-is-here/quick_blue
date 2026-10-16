@@ -52,7 +52,7 @@
 - Correct connection documentation to describe cancelled cleared discovery
   waiters as implemented behavior, not the historical characterization gap.
 
-- Keep the CLI example compatible with the workspace's Dart 3.12.2 minimum and
+- Retain the pure-Dart CLI example's Dart 3.12.2 package constraint and
   run standalone L2CAP watchdog children with the active SDK even off `PATH`.
 
 - Add a standalone ARM64 cross-build/ELF verifier with optional controlled QEMU
