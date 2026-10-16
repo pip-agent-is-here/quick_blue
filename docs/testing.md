@@ -32,8 +32,7 @@ done
 
 Linux's development-only ffigen pin is `21.0.0`: version `22.0.0` pulls
 `code_assets ^2.0.0` / `hooks ^2.2.0` / `record_use ^1.0.0`, requiring
-`meta ^1.19.0`, while Flutter `3.44.2` pins `meta 1.18.0`. The minimum remains
-unchanged; no runtime dependency or generated binding is changed. On Fedora,
+`meta ^1.19.0`, while Flutter `3.44.2` pins `meta 1.18.0`. On Fedora,
 regenerate with `dart run ffigen --config ffigen.yaml --compiler-opts
 '-I/usr/lib/clang/22/include'` inside `quick_blue_linux` when libclang's bundled
 resource headers are not found automatically. This host-specific include path
@@ -75,15 +74,14 @@ python3 -O -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 The Documentation workflow runs these tests alongside OKF validation and a clean
-site build. The suite includes 13 OKF tests, 15 built-site tests, four release
-metadata tests and five consumer-construction tests. Site fixtures run the copied
+site build. Site fixtures run the copied
 validator in normal and optimized subprocesses, checking navigation coverage and
 duplicates, rendered pages, anchors, missing targets, absolute/encoded project
 prefix escapes, resolved dot-segment/encoded/relative traversal, file and directory
 symlink escapes (where supported), valid parent-relative links and search assets.
 Release fixtures check version/constraint drift,
 malformed version values, dependency membership and usage errors before a logging
-Dart stand-in can run. Bash itself has no Python optimization mode.
+Dart stand-in can run.
 
 Consumer fixtures mock command execution and synthesize package graphs/configs;
 they check Git dependency quoting/overrides, isolated roots and dependencies,
@@ -249,10 +247,9 @@ loading BlueZ or opening a Bluetooth socket:
 The [channel tests](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/l2cap_channel_test.dart) cover exact
 bytes for success, partial sends, finite EINTR and EAGAIN, failed connect (including
 the eight-attempt EINTR limit), send/receive closure and allocation/fd cleanup.
-The only production seam added is an optional allocator defaulting to `calloc`;
-the existing `Libc`/`LibBluetooth` injection supplies scripted calls. The counting
+The `Libc`/`LibBluetooth` wrappers supply scripted calls. The counting
 allocator delegates to real zeroed allocations; fd counts describe fake ownership,
-not kernel descriptors. No socket behavior correction is included.
+not kernel descriptors.
 
 The [parent watchdog](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/l2cap_harness_test.dart) launches
 separate Dart processes for persistent first-chunk EINVAL, send/recv EINTR,
