@@ -144,6 +144,10 @@ without detach joins it. Explicit disconnect supersedes that pending connect.
 A fresh reconnect after detach must reacquire actual membership and a native
 target, not join a retired native Connect reply. Late success/error cannot alter
 the replacement connection; this is lifetime retirement, not native abort.
+A new explicit disconnect also retires a reconnect queued behind an earlier
+teardown, even when both disconnects join that cleanup. A reconnect requested
+after the new disconnect remains intentional; old native-event cleanup does not
+retire it merely by joining the same teardown.
 See the [Linux ownership regression boundary](multi-engine.md#verification-boundary).
 Clearing device state cancels pending discovery waits, and a late notification
 setup releases its native claim without installing a watch. Notification setup
