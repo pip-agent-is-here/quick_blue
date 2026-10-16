@@ -118,6 +118,12 @@ to the normal package suite.
 
 ## Native and generated boundaries
 
+The external Git-consumer check (`python3 scripts/check-linux-consumer.py`)
+isolates Flutter template bootstrap in a separate Pub cache: a cold SDK can
+populate it even with `flutter create --no-pub`. The consumer cache must remain
+empty immediately before dependency resolution; fixtures also reject a dirty
+consumer cache. Each external consumer is analyzed and built for Linux.
+
 | Change | Check |
 | --- | --- |
 | Pigeon schema | Run `dart run pigeon --input pigeons/messages.dart` inside each changed owning package; inspect generated diff |

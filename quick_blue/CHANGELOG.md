@@ -5,6 +5,9 @@
 
 ### Fixed
 
+- Isolate Flutter template bootstrap from external Linux consumer dependency
+  resolution, retaining the assertion that the consumer Pub cache starts empty.
+
 - Close notification streams after terminal setup failure with one error followed
   by done, without requiring consumer cancellation. Preserve acquired-claim
   cleanup after pending setup settles, shared last-owner teardown and mode
