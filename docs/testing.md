@@ -399,7 +399,12 @@ default clients retain the leased native device across cache replacement on
 disconnect and close, failed detach preserves that target for retry, and
 spontaneous release allows retry on a replacement without stale property events
 detaching its ownership. Default/explicit clients on one adapter share final-owner
-cleanup, and failed connect releases only its own lease.
+cleanup, and failed connect releases only its own lease. The late-unlock matrix
+combines native disconnect events during pending teardown, successful and failed
+unlock replies, cache replacement and public platform/facade retries. A no-event
+failed-unlock case verifies facade retry completes rather than silently pending.
+Five-second watchdogs and completion markers bound these integrated scenarios;
+the independent adapter's connection and final lease cleanup are asserted.
 `test/src/connection_lease_test.dart` records shared
 D-Bus owners and last-client serialization; adapter tests retain first-powered
 defaults and missing/unpowered/removed explicit selections. Watchdogs bound

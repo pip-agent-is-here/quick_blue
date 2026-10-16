@@ -493,6 +493,16 @@ class QuickBlueLinux extends QuickBluePlatform {
       await _clearDeviceState(deviceId, removeDevice: false);
     } on Object catch (error, stackTrace) {
       _logger.severe('Failed to disconnect from $deviceId', error, stackTrace);
+      if (!device.connected) {
+        // Native disconnect may have succeeded before lease cleanup failed.
+        // Reconcile the facade even when BlueZ emits no property event, while
+        // preserving the teardown error and the retained lease/target for retry.
+        _emitConnectionState(
+          deviceId,
+          BlueConnectionState.disconnected,
+          BleStatus.success,
+        );
+      }
       rethrow;
     }
   }

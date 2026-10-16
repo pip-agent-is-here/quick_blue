@@ -10,6 +10,10 @@
 
 ### Headless Linux
 
+- Coalesce reentrant connection detach until teardown settles, retaining native
+  target and lease identity through late unlock failure. Reconcile an already
+  disconnected native device on cleanup failure even without a property event,
+  so facade reconnect can retry without hanging or disconnecting another adapter.
 - Retain the leased native device across default-adapter cache replacement so
   disconnect and close cannot disconnect another adapter's owner or leak the
   original connection. Preserve that target on failed detach; retire it after

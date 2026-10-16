@@ -8,6 +8,70 @@ import 'package:test/test.dart';
 import 'adapter_selection_test.dart' as fake;
 
 void main() {
+  for (final facade in [false, true]) {
+    for (final mode in ['late failure', 'no event', 'success']) {
+      test('pending native detach stays coherent ($facade, $mode)', () async {
+        await (() async {
+          final a = fake.Adapter('02:00:00:00:00:01');
+          final b = fake.Adapter('02:00:00:00:00:02');
+          const remote = '02:00:00:00:00:03';
+          final da = DisconnectEventDevice(a, remote)
+            ..connected = false
+            ..emit = mode != 'no event';
+          final db = fake.Device(b, remote)..connected = false;
+          addTearDown(da.events.close);
+          final owners = <String, String>{};
+          final devices = <fake.Device>[da];
+          final client = fake.Client([a, b])..deviceList = devices;
+          addTearDown(client.removed.close);
+          final bus = UnlockBus(owners, ':1.1')
+            ..throwFailure = mode != 'success';
+          final pa = QuickBlueLinux.withClient(
+            client,
+            connectionLease: DbusConnectionLease.withBus(bus),
+          );
+          addTearDown(pa.close);
+          final pb = platform([a, b], [db], b.address, owners, ':1.2');
+          await pa.device(remote).connect();
+          await pb.device(remote).connect();
+          bus.holdUnlock = true;
+          final disconnect = pa
+              .device(remote)
+              .disconnect()
+              .then<Object?>((_) => null, onError: (Object error) => error);
+          await bus.entered.future;
+          // Deliver Connected=false while the final lock reply is pending.
+          await pumpEventQueue();
+          bus.proceed.complete();
+          final error = await disconnect;
+          if (bus.throwFailure) {
+            expect(error.toString(), contains('unlock reply'));
+          } else {
+            expect(error, isNull);
+          }
+          devices.add(db);
+          await pa.connectedDevices();
+          if (facade) {
+            await pa.device(remote).connect();
+          } else {
+            await pa.connect(remote);
+          }
+          await pa.device(remote).disconnect();
+          expect(db.connected, isTrue);
+          expect(db.disconnects, 0);
+          expect(owners.length, 1);
+          await pa.close();
+          await pb.close();
+          expect(owners, isEmpty);
+          expect(da.connected, isFalse);
+          expect(db.connected, isFalse);
+          expect(db.disconnects, 1);
+        })().timeout(const Duration(seconds: 5));
+        // An unresolved scenario must fail, never exit silently as a pass.
+        print('SCENARIO_COMPLETED');
+      });
+    }
+  }
   for (final closeOnly in [false, true]) {
     test(
       'default cache replacement retains native owner (closeOnly=$closeOnly)',
@@ -247,6 +311,36 @@ class RetryBus extends Bus {
     if (failRelease) {
       failRelease = false;
       throw StateError('release');
+    }
+    await super.releaseName(name);
+  }
+}
+
+class DisconnectEventDevice extends EventDevice {
+  DisconnectEventDevice(super.adapter, super.remoteAddress);
+  bool emit = true;
+  @override
+  Future<void> disconnect() async {
+    await super.disconnect();
+    if (emit) events.add(['Connected']);
+  }
+}
+
+class UnlockBus extends Bus {
+  UnlockBus(super.owners, super.uniqueName);
+  bool holdUnlock = false;
+  bool throwFailure = true;
+  final entered = Completer<void>();
+  final proceed = Completer<void>();
+  @override
+  Future<void> releaseName(String name) async {
+    if (holdUnlock && name.endsWith('.Lock')) {
+      holdUnlock = false;
+      entered.complete();
+      await proceed.future;
+      await super.releaseName(name);
+      if (throwFailure) throw StateError('injected unlock reply failure');
+      return;
     }
     await super.releaseName(name);
   }

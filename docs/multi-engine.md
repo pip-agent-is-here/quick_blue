@@ -44,15 +44,22 @@ different adapter does not retain the first adapter's native connection. Linux
 retains the original native device for the lifetime of its lease: discovery/cache refresh
 can expose the same remote address on another adapter, but must not redirect
 disconnect or close to that replacement. Failed detach retains the original
-target for retry; spontaneous disconnect releases it before a later connection
-can select a replacement.
+target for retry, including a late D-Bus unlock failure after native disconnect.
+Reentrant native disconnect events join the pending detach rather than retiring
+the target early; attaches wait for that teardown to settle. A failed cleanup
+still reports its error, but reconciles the facade to an already-disconnected
+native device even without a property event, allowing a later explicit retry.
+Spontaneous disconnect releases the target before a later connection can select
+a replacement.
 Use matching package revisions for cooperating clients: older remote-address-only
 lease namespaces do not coordinate with the corrected adapter-scoped namespace.
 `quick_blue_linux/test/adapter_lease_test.dart` exercises the real ownership
 coordinator and `quick_blue_linux/lib/src/dbus_connection_lease.dart`
 with a fake bus and BlueZ devices, including default-client cache replacement
 on disconnect/close, independent close, failed connect, detach retry and
-spontaneous-disconnect/retry subscription cleanup.
+spontaneous-disconnect/retry subscription cleanup, pending unlock failures with
+reentrant native events, and no-event facade retries. Each integrated late-unlock
+scenario has a watchdog and completion marker.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.
