@@ -24,16 +24,16 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
 
 ## Linux GATT teardown characterization
 
-Linux teardown does not reliably stop pending discovery or notification setup.
-The `characterization:` tests in
+Linux teardown cancels pending discovery and retires late notification setup.
+The regression and `characterization:` tests in
 [`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/gatt_session_test.dart)
-reproduce these unresolved lifetime gaps with fake BlueZ objects:
+distinguish corrected lifetime behavior from the remaining gap with fake BlueZ objects:
 
 | Controlled ordering | Observed fake-BlueZ result |
 | --- | --- |
-| Pending `ServicesResolved`, then clear, replacement discovery, then old resolution | Old waiter survives clear; replacement completes first, then old resolution emits a second discovery and completion. |
-| `StartNotify` suspended until client release and clear finish | Teardown makes zero `StopNotify` calls; resumed setup installs a watch and emits initial `[0]` and later `[6]`. Later client release also makes zero calls with its cache cleared. |
-| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Listener survives invalidation; release and clear make zero `StopNotify` calls and the fake stays notifying. Cache-intact control makes exactly one call and stops notifying. |
+| Pending `ServicesResolved`, then clear, replacement discovery, then old resolution | Old discovery fails with `cancelled`; only replacement discovery emits completion, and the old property listener is removed. |
+| `StartNotify` suspended until client release and clear finish | Resumed setup fails with `cancelled`, releases its late claim exactly once and installs no watch or value delivery. |
+| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Release and clear make zero `StopNotify` calls and the fake stays notifying, although clear removes its listener. Cache-intact control makes exactly one call and stops notifying. |
 
 Run the current regression suite from the repository root:
 
