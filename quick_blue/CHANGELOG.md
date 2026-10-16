@@ -12,6 +12,9 @@
 
 ### Headless Linux
 
+- Retire older queued reconnect intent on every explicit disconnect, even when
+  joining an existing teardown. Preserve intentionally newer reconnects and
+  native-event cleanup coalescing, failed-cleanup retry and visible errors.
 - Limit pending native-connect coalescing to its ownership lifetime. Explicit
   detach retires that request; reconnect reacquires actual Client membership and
   its native target without awaiting the retired reply. Late success/error cannot

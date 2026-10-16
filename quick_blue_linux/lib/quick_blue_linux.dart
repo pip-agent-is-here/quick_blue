@@ -531,6 +531,10 @@ class QuickBlueLinux extends QuickBluePlatform {
         message: 'This Flutter engine is not connected to $deviceId.',
       );
     }
+    // Each explicit disconnect is new intent, even when joining old teardown.
+    // Retire only the connect preceding this request, before cleanup suspends;
+    // a later reconnect may intentionally wait for that same teardown.
+    _connecting.remove(deviceId);
     final device = _getDeviceOrThrow(deviceId);
 
     try {
@@ -545,6 +549,7 @@ class QuickBlueLinux extends QuickBluePlatform {
               // Already disconnected, ignore.
             }
           },
+          retireConnect: false,
         );
       });
 

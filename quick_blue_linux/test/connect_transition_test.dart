@@ -11,6 +11,139 @@ import 'reattach_transition_test.dart' as reattach;
 void main() {
   for (final direct in [false, true]) {
     for (final emit in [false, true]) {
+      for (final intent in [
+        'final-disconnect',
+        'no-second',
+        'settle-first',
+        'no-reconnect',
+        'newer-reconnect',
+        'failed-detach',
+      ]) {
+        test('queued reconnect intent ($direct, $emit, $intent)', () async {
+          await (() async {
+            final adapter = fake.Adapter('02:00:00:00:00:01');
+            final device =
+                lease.DisconnectEventDevice(adapter, '02:00:00:00:00:03')
+                  ..connected = false
+                  ..emit = emit;
+            addTearDown(device.events.close);
+            final owners = <String, String>{};
+            final client = fake.Client([adapter])..deviceList = [device];
+            addTearDown(client.removed.close);
+            final bus = lease.UnlockBus(owners, ':1.1')
+              ..throwFailure = intent == 'failed-detach';
+            final a = QuickBlueLinux.withClient(
+              client,
+              connectionLease: DbusConnectionLease.withBus(bus),
+            );
+            addTearDown(a.close);
+            addTearDown(() {
+              if (!bus.proceed.isCompleted) bus.proceed.complete();
+            });
+            Future<void> connect() => direct
+                ? a.connect(device.address)
+                : a.device(device.address).connect();
+            Future<void> disconnect() => direct
+                ? a.disconnect(device.address)
+                : a.device(device.address).disconnect();
+            Future<Object?> result(Future<void> future) =>
+                future.then<Object?>((_) => null, onError: (Object e) => e);
+            await connect();
+            final nameA = owners.keys.single;
+            bus.holdUnlock = true;
+            final first = result(disconnect());
+            await bus.entered.future;
+            final retry = intent == 'no-reconnect'
+                ? Future<Object?>.value()
+                : result(connect());
+            final duplicate = intent == 'no-second'
+                ? result(connect())
+                : Future<Object?>.value();
+            await pumpEventQueue();
+            expect(owners.containsKey(nameA), isFalse);
+            expect(device.connected, isFalse);
+            expect(device.connects, 1);
+            if (intent == 'settle-first') {
+              bus.proceed.complete();
+              expect(await retry, isNull);
+            }
+            var finalSettled = false;
+            final last = intent == 'no-second'
+                ? Future<Object?>.value()
+                : result(disconnect()).then((error) {
+                    finalSettled = true;
+                    return error;
+                  });
+            await pumpEventQueue();
+            if (intent != 'no-second' && intent != 'settle-first') {
+              expect(finalSettled, isFalse, reason: 'unlock is still pending');
+            }
+            final newest = intent == 'newer-reconnect'
+                ? result(connect())
+                : Future<Object?>.value();
+            await pumpEventQueue();
+            if (!bus.proceed.isCompleted) bus.proceed.complete();
+            final errors = await Future.wait([first, retry, last, newest]);
+            expect(await duplicate, isNull);
+            expect(
+              errors[0],
+              !direct && intent != 'no-reconnect'
+                  ? isCancelled
+                  : intent == 'failed-detach'
+                  ? isA<StateError>()
+                  : isNull,
+            );
+            await pumpEventQueue();
+            final live = intent == 'no-second' || intent == 'newer-reconnect';
+            expect(owners.containsKey(nameA), live);
+            expect(device.connected, live);
+            expect(device.connects, live || intent == 'settle-first' ? 2 : 1);
+            if (intent == 'failed-detach') {
+              expect(errors[2], isA<StateError>());
+              expect(errors[1], direct ? isA<StateError>() : isCancelled);
+              // The failed old teardown remains observable and retryable.
+              await connect();
+              expect(owners[nameA], ':1.1');
+              expect(device.connected, isTrue);
+            } else {
+              expect(
+                errors[2],
+                !direct && intent == 'newer-reconnect' ? isCancelled : isNull,
+              );
+              expect(errors[3], isNull);
+              if (intent == 'final-disconnect' || intent == 'newer-reconnect') {
+                expect(errors[1], isCancelled);
+              } else {
+                expect(errors[1], isNull);
+              }
+            }
+            if (live || intent == 'failed-detach') {
+              final b = lease.platform(
+                [adapter],
+                [device],
+                null,
+                owners,
+                ':1.2',
+              );
+              await b.connect(device.address);
+              final before = device.disconnects;
+              await b.close();
+              expect(owners[nameA], ':1.1');
+              expect(device.connected, isTrue);
+              expect(device.disconnects, before);
+            }
+            await a.close();
+            expect(owners, isEmpty);
+            expect(device.connected, isFalse);
+          })().timeout(const Duration(seconds: 5));
+          print('SCENARIO_COMPLETED');
+        });
+      }
+    }
+  }
+
+  for (final direct in [false, true]) {
+    for (final emit in [false, true]) {
       for (final failOld in [false, true]) {
         for (final closePeer in [false, true]) {
           test(
@@ -338,6 +471,12 @@ void main() {
     );
   }
 }
+
+final isCancelled = isA<QuickBlueException>().having(
+  (e) => e.code,
+  'code',
+  QuickBlueErrorCode.cancelled,
+);
 
 class ReplyDevice extends lease.DisconnectEventDevice {
   ReplyDevice(super.adapter, super.remoteAddress);

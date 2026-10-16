@@ -61,6 +61,10 @@ detach must settle and membership must be restored before a still-live attach
 succeeds. Explicit detach retires its pending connect requester; completing raw
 registration still records the identity needed for cleanup, but cannot resurrect
 that retired request after teardown.
+Every explicit disconnect retires the connect intent preceding it, including a
+reconnect waiting behind an already-pending detach. This happens before cleanup
+suspends, not only when creating a new detach. Later reconnects may still wait
+for the old cleanup; reentrant native events joining it do not cancel them.
 Reconnect retires the preceding native property observer before registration
 and native connect can suspend, so a delayed old disconnect event cannot remove
 the new membership. Concurrent connects in the same ownership lifetime share
@@ -101,6 +105,10 @@ paths, and checks actual Client names, peer disconnect/close protection, stale
 success/error, pending replacement coalescing, adapter replacement and full
 cleanup. Same-lifetime duplicates and settled replies remain controls; explicit
 detach during pending re-registration must not resurrect retired membership.
+It also holds successful/failed final unlock replies while reconnect and a newer
+explicit disconnect overlap through public calls. Tests assert actual membership,
+native state, pending-reply behavior, newer/duplicate reconnect controls, failed
+cleanup retry, peer protection and complete final name cleanup.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.
