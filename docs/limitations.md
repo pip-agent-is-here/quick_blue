@@ -24,10 +24,10 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
 
 ## Linux GATT teardown characterization
 
-At production baseline `0596865a0a46e18f7dc6d56561a79f538cf7bcea`,
-the three `characterization:` tests in
-[`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/2cce9eb00644c2a9daa60534791fc94a00fd7f8d/quick_blue_linux/test/gatt_session_test.dart)
-pin observed gaps, not corrected behavior:
+Linux teardown does not reliably stop pending discovery or notification setup.
+The `characterization:` tests in
+[`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/gatt_session_test.dart)
+reproduce these unresolved lifetime gaps with fake BlueZ objects:
 
 | Controlled ordering | Observed fake-BlueZ result |
 | --- | --- |
@@ -42,19 +42,11 @@ Run from the repository root:
   --plain-name 'characterization:' --reporter expanded)
 ```
 
-The one-shot `FutureGate` observes setup entry before teardown and explicitly
-releases it afterward; no sleep determines ordering. Replacement is a new fake
-BlueZ object at the same address, not a physical reconnect. Passing assertions
-preserve gaps, not safe teardown. Evidence proves reproducible fake-BlueZ
-lifetime behavior only, not real BlueZ cleanup, D-Bus ownership release, or
-hardware semantics. Production code is unchanged by these tests.
-
-To fix these gaps, old resolution
-must not emit into a replacement lifetime and must settle observably; late setup
-must not revive watches/values and must balance acquired native ownership;
-cache-invalidated final release must stop the old characteristic exactly once
-and remove its listener without re-resolution. The current implementation does
-not meet these requirements.
+The tests control ordering explicitly. A replacement is a new fake object at the
+same address, not a physical reconnect. Passing these assertions confirms the
+gaps still exist; it does not establish safe teardown, real BlueZ cleanup or
+D-Bus ownership release. Do not assume cancellation prevents late discovery
+events or releases native notification ownership.
 
 ## Verification gaps
 
