@@ -52,6 +52,8 @@ independently. Cooperating clients require matching revisions.
 Cache refresh cannot redirect a held connection's native cleanup to another adapter.
 Pending/reentrant teardown and late unlock failure retain the native target
 through retry.
+Failed-teardown reconnect restores membership while retaining that target,
+protecting it from peer disconnect or close.
 
 ## Try the BLE explorer
 

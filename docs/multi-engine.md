@@ -49,6 +49,11 @@ Reentrant native disconnect events join the pending detach rather than retiring
 the target early; attaches wait for that teardown to settle. A failed cleanup
 still reports its error, but reconciles the facade to an already-disconnected
 native device even without a property event, allowing a later explicit retry.
+Retained cleanup identity is not proof of active D-Bus membership: after failed
+detach, reconnect confirms or restores the original Client name under the existing
+lease lock before reporting success. A same-adapter peer's disconnect or close
+therefore cannot treat that reconnected client as absent. Reattach errors remain
+observable and do not discard the retained cleanup target.
 Spontaneous disconnect releases the target before a later connection can select
 a replacement.
 Use matching package revisions for cooperating clients: older remote-address-only
@@ -60,6 +65,8 @@ on disconnect/close, independent close, failed connect, detach retry and
 spontaneous-disconnect/retry subscription cleanup, pending unlock failures with
 reentrant native events, and no-event facade retries. Each integrated late-unlock
 scenario has a watchdog and completion marker.
+The failed-cleanup/reconnect matrix also asserts actual bus membership and
+same-adapter peer disconnect/close protection with and without native events.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.

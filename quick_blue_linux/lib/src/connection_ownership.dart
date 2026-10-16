@@ -18,6 +18,7 @@ class ConnectionOwnership {
 
   final QuickBlueLinuxConnectionLease _lease;
   final Map<String, String> _leaseIds = <String, String>{};
+  final Set<String> _membershipUncertain = <String>{};
   final Map<String, Future<void>> _detaching = <String, Future<void>>{};
 
   List<String> get deviceIds => List.unmodifiable(_leaseIds.keys);
@@ -32,12 +33,16 @@ class ConnectionOwnership {
 
   Future<void> attach(String deviceId, {String? leaseId}) async {
     await _detaching[deviceId];
-    if (_leaseIds.containsKey(deviceId)) {
+    if (_leaseIds.containsKey(deviceId) &&
+        !_membershipUncertain.contains(deviceId)) {
       return;
     }
-    final identity = leaseId ?? deviceId;
+    // A failed detach can have released the real Client name before failing
+    // its final unlock reply. Retained cleanup identity is not live membership.
+    final identity = _leaseIds[deviceId] ?? leaseId ?? deviceId;
     await _lease.attach(identity);
     _leaseIds[deviceId] = identity;
+    _membershipUncertain.remove(deviceId);
   }
 
   Future<void> detach(
@@ -57,9 +62,11 @@ class ConnectionOwnership {
     // Keep identity visible until teardown settles. Native disconnect events
     // can reenter detach while the final D-Bus unlock reply is still pending.
     final identity = _leaseIds[deviceId]!;
+    _membershipUncertain.add(deviceId);
     try {
       await _lease.detach(identity, onLastClient);
       _leaseIds.remove(deviceId);
+      _membershipUncertain.remove(deviceId);
     } finally {
       _detaching.remove(deviceId);
     }
