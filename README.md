@@ -49,6 +49,7 @@ and troubleshooting. For specific operations, see:
 With [adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary),
 same-adapter clients share final-owner cleanup; different adapters release
 independently. Cooperating clients require matching revisions.
+Cache refresh cannot redirect a held connection's native cleanup to another adapter.
 
 ## Try the BLE explorer
 

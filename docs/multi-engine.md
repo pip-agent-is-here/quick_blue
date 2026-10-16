@@ -40,12 +40,19 @@ CoreBluetooth; a preceding scan is not always necessary.
 Linux connection leases identify the actual local adapter and remote device
 address together. Two clients using the same adapter share the final-client
 disconnect rule (including default versus explicit selection); selecting a
-different adapter does not retain the first adapter's native connection. Use
-matching package revisions for cooperating clients: older remote-address-only
+different adapter does not retain the first adapter's native connection. Linux
+retains the original native device for the lifetime of its lease: discovery/cache refresh
+can expose the same remote address on another adapter, but must not redirect
+disconnect or close to that replacement. Failed detach retains the original
+target for retry; spontaneous disconnect releases it before a later connection
+can select a replacement.
+Use matching package revisions for cooperating clients: older remote-address-only
 lease namespaces do not coordinate with the corrected adapter-scoped namespace.
 `quick_blue_linux/test/adapter_lease_test.dart` exercises the real ownership
 coordinator and `quick_blue_linux/lib/src/dbus_connection_lease.dart`
-with a fake bus and BlueZ devices, including independent close and failed connect.
+with a fake bus and BlueZ devices, including default-client cache replacement
+on disconnect/close, independent close, failed connect, detach retry and
+spontaneous-disconnect/retry subscription cleanup.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.

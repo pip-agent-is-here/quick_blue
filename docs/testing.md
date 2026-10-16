@@ -403,8 +403,12 @@ native stop failures, so a retired release cannot disable the retry claim.
 Adapter tests cover the same remote address on multiple adapters without foreign
 native connect submissions. `test/adapter_lease_test.dart` integrates the real
 D-Bus lease with fake bus/BlueZ clients: different adapters disconnect independently,
-default/explicit clients on one adapter share final-owner cleanup, and failed
-connect releases only its own lease. `test/src/connection_lease_test.dart` records shared
+default clients retain the leased native device across cache replacement on
+disconnect and close, failed detach preserves that target for retry, and
+spontaneous release allows retry on a replacement without stale property events
+detaching its ownership. Default/explicit clients on one adapter share final-owner
+cleanup, and failed connect releases only its own lease.
+`test/src/connection_lease_test.dart` records shared
 D-Bus owners and last-client serialization; adapter tests retain first-powered
 defaults and missing/unpowered/removed explicit selections. Watchdogs bound
 pending regression futures. None of these tests accesses Bluetooth hardware.

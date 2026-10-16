@@ -12,6 +12,10 @@
 
 ### Headless Linux
 
+- Retain the leased native device across default-adapter cache replacement so
+  disconnect and close cannot disconnect another adapter's owner or leak the
+  original connection. Preserve that target on failed detach; retire it after
+  successful or spontaneous release before retry selects a replacement.
 - Scope connection leases by actual local adapter plus remote address. Preserve
   same-adapter last-client cleanup while independently releasing connections to
   the same peripheral through different adapters. Cooperating clients must use
