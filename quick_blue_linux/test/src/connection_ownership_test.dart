@@ -4,6 +4,64 @@ import 'package:test/test.dart';
 import 'package:quick_blue_linux/src/connection_ownership.dart';
 
 void main() {
+  for (final queued in [false, true]) {
+    test('retired requester does not restore membership ($queued)', () async {
+      final lease = _FakeConnectionLease();
+      final ownership = ConnectionOwnership(lease);
+      var current = true;
+      var starts = 0;
+      Future<void> detach() => ownership.detach(
+        'device',
+        onStart: () {
+          current = false;
+          starts++;
+        },
+        onLastClient: () async {},
+      );
+      if (queued) {
+        await ownership.attach('device', leaseId: 'original/device');
+        final proceed = Completer<void>();
+        final detached = ownership.detach(
+          'device',
+          onStart: () {
+            starts++;
+          },
+          onLastClient: () => proceed.future,
+        );
+        final attached = ownership.attach(
+          'device',
+          leaseId: 'replacement/device',
+          isCurrent: () => current,
+        );
+        await pumpEventQueue();
+        current = false;
+        proceed.complete();
+        await Future.wait([attached, detached]);
+      } else {
+        lease.attachGate = Completer<void>();
+        final attached = ownership.attach(
+          'device',
+          leaseId: 'original/device',
+          isCurrent: () => current,
+        );
+        await pumpEventQueue();
+        final detached = detach();
+        final repeated = detach();
+        expect(identical(detached, repeated), isTrue);
+        lease.attachGate!.complete();
+        await Future.wait([attached, detached, repeated]);
+      }
+      expect(starts, 1);
+      expect(lease.attachments, ['original/device']);
+      expect(lease.detachments, ['original/device']);
+      expect(ownership.owns('device'), isFalse);
+      lease.attachGate = null;
+      await ownership.attach('device', leaseId: 'replacement/device');
+      expect(lease.attachments, ['original/device', 'replacement/device']);
+      await ownership.detach('device', onLastClient: () async {});
+      expect(ownership.deviceIds, isEmpty);
+    });
+  }
   for (final microtask in [false, true]) {
     test(
       'native callback inside lease registration settles ($microtask)',

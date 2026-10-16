@@ -46,6 +46,8 @@ and troubleshooting. For specific operations, see:
 - [Multiple Flutter engines](docs/multi-engine.md)
 - [L2CAP sockets](docs/l2cap.md)
 
+Reconnect after explicit detach does not join retired native replies; old events
+and replies cannot release the replacement owner.
 
 With [adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary),
 same-adapter clients share final-owner cleanup; different adapters release
