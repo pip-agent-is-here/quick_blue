@@ -10,6 +10,10 @@
 
 ### Headless Linux
 
+- Retire connection-state deduplication only after all asynchronous device clear
+  and native-observer cleanup completes. A delayed native disconnected event
+  cannot suppress terminal completion for a joining facade disconnect. Preserve
+  newer-connect ordering, duplicate joins and observable cleanup errors/retry.
 - Gate reconnect on the complete explicit disconnect before StopNotify can
   suspend, through lease release and old state/observer cleanup. Preserve newer
   reconnect intent and native-event coalescing during notification release;
