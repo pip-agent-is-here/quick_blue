@@ -39,6 +39,9 @@ class DbusConnectionLease
     try {
       await _withDeviceLock(deviceId, () async {
         final name = _clientNameFor(deviceId);
+        // A transport error can arrive after the bus accepted registration.
+        // Roll back our name even when no successful reply was received.
+        acquiredName = name;
         final reply = await _bus.requestName(name);
         if (reply != DBusRequestNameReply.primaryOwner &&
             reply != DBusRequestNameReply.alreadyOwner) {
@@ -46,7 +49,6 @@ class DbusConnectionLease
             'Unable to register a connection client for $deviceId',
           );
         }
-        acquiredName = name;
       });
     } catch (error, stack) {
       if (acquiredName case final name?) {
@@ -89,26 +91,28 @@ class DbusConnectionLease
   ) async {
     final lockName = '${_clientNamePrefix(deviceId)}.Lock';
     final deadline = DateTime.now().add(_lockTimeout);
-    while (true) {
-      final reply = await _bus.requestName(
-        lockName,
-        flags: const {DBusRequestNameFlag.doNotQueue},
-      );
-      if (reply == DBusRequestNameReply.primaryOwner ||
-          reply == DBusRequestNameReply.alreadyOwner) {
-        break;
-      }
-      if (DateTime.now().isAfter(deadline)) {
-        // A stale lock name would otherwise block attach/detach forever.
-        throw StateError(
-          'Timed out after ${_lockTimeout.inSeconds}s acquiring the quick_blue '
-          'connection lock $lockName',
-        );
-      }
-      await Future<void>.delayed(_lockPollInterval);
-    }
     Object? primaryError;
     try {
+      // Include acquisition in cleanup: its reply may fail after the bus has
+      // granted the name. Releasing a name owned by another client is a no-op.
+      while (true) {
+        final reply = await _bus.requestName(
+          lockName,
+          flags: const {DBusRequestNameFlag.doNotQueue},
+        );
+        if (reply == DBusRequestNameReply.primaryOwner ||
+            reply == DBusRequestNameReply.alreadyOwner) {
+          break;
+        }
+        if (DateTime.now().isAfter(deadline)) {
+          // A stale lock name would otherwise block attach/detach forever.
+          throw StateError(
+            'Timed out after ${_lockTimeout.inSeconds}s acquiring the quick_blue '
+            'connection lock $lockName',
+          );
+        }
+        await Future<void>.delayed(_lockPollInterval);
+      }
       await action();
     } catch (error) {
       primaryError = error;
