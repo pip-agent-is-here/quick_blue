@@ -1,7 +1,63 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:quick_blue_linux/src/connection_ownership.dart';
 
 void main() {
+  for (final fail in [false, true]) {
+    test(
+      'pending detach joins reentry and gates attach (fail=$fail)',
+      () async {
+        final lease = _FakeConnectionLease();
+        final ownership = ConnectionOwnership(lease);
+        await ownership.attach('device', leaseId: 'adapter-a/device');
+        final entered = Completer<void>();
+        final proceed = Completer<void>();
+        var repeatedCleanups = 0;
+        final first = ownership.detach(
+          'device',
+          onLastClient: () async {
+            entered.complete();
+            await proceed.future;
+            if (fail) throw StateError('late teardown failure');
+          },
+        );
+        await entered.future;
+        final repeated = ownership.detach(
+          'device',
+          onLastClient: () async {
+            repeatedCleanups++;
+          },
+        );
+        expect(identical(first, repeated), isTrue);
+        expect(ownership.owns('device'), isTrue);
+        var attached = false;
+        final retry = ownership
+            .attach('device', leaseId: 'adapter-b/device')
+            .then((_) {
+              attached = true;
+            });
+        await pumpEventQueue();
+        expect(attached, isFalse);
+        final settlements = [
+          for (final future in [first, repeated, retry])
+            expectLater(future, fail ? throwsStateError : completes),
+        ];
+        proceed.complete();
+        await Future.wait(settlements);
+        expect(repeatedCleanups, 0);
+        expect(lease.detachments, ['adapter-a/device']);
+        expect(
+          lease.attachments,
+          fail
+              ? ['adapter-a/device']
+              : ['adapter-a/device', 'adapter-b/device'],
+        );
+        await ownership.detach('device', onLastClient: () async {});
+        expect(ownership.owns('device'), isFalse);
+      },
+    );
+  }
   test(
     'scoped lease identity is retained across failed detach and retry',
     () async {
