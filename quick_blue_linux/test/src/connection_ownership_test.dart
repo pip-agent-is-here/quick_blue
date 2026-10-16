@@ -4,6 +4,107 @@ import 'package:test/test.dart';
 import 'package:quick_blue_linux/src/connection_ownership.dart';
 
 void main() {
+  for (final microtask in [false, true]) {
+    test(
+      'native callback inside lease registration settles ($microtask)',
+      () async {
+        final lease = _FakeConnectionLease()..attachGate = Completer<void>();
+        final ownership = ConnectionOwnership(lease);
+        Future<void>? event;
+        void detach() {
+          event ??= ownership.detach('device', onLastClient: () async {});
+        }
+
+        lease.onAttach = () {
+          if (microtask) {
+            scheduleMicrotask(detach);
+          } else {
+            detach();
+          }
+        };
+        final attached = ownership.attach('device', leaseId: 'original/device');
+        await pumpEventQueue();
+        expect(event, isNotNull);
+        expect(lease.detachments, isEmpty);
+        lease.attachGate!.complete();
+        await attached;
+        await event;
+        expect(ownership.owns('device'), isTrue);
+        expect(lease.attachments, ['original/device', 'original/device']);
+        await ownership.detach('device', onLastClient: () async {});
+        expect(ownership.deviceIds, isEmpty);
+      },
+    );
+  }
+  for (final retry in [false, true]) {
+    for (final synchronous in [false, true]) {
+      for (final fail in [false, true]) {
+        test(
+          'attach joins and settles intervening detach ($retry, $synchronous, $fail)',
+          () async {
+            final lease = _FakeConnectionLease();
+            final ownership = ConnectionOwnership(lease);
+            if (retry) {
+              await ownership.attach('device', leaseId: 'original/device');
+              lease.detachError = StateError('partial teardown');
+              await expectLater(
+                ownership.detach('device', onLastClient: () async {}),
+                throwsStateError,
+              );
+              lease.detachments.clear();
+              lease.attachments.clear();
+            }
+            lease.detachError = fail ? StateError('event detach') : null;
+            lease.attachGate = Completer<void>();
+            final first = ownership.attach(
+              'device',
+              leaseId: retry ? 'replacement/device' : 'original/device',
+            );
+            final second = ownership.attach(
+              'device',
+              leaseId: 'replacement/device',
+            );
+            final results = [
+              expectLater(first, fail ? throwsStateError : completes),
+              expectLater(second, fail ? throwsStateError : completes),
+            ];
+            if (!synchronous) await pumpEventQueue();
+            final detached = ownership.detach(
+              'device',
+              onLastClient: () async {},
+            );
+            final detachResult = expectLater(
+              detached,
+              fail ? throwsStateError : completes,
+            );
+            await pumpEventQueue();
+            final pendingAttachments = List.of(lease.attachments);
+            final pendingDetachments = List.of(lease.detachments);
+            lease.attachGate!.complete();
+            await Future.wait([...results, detachResult]);
+            expect(pendingAttachments, ['original/device']);
+            expect(
+              pendingDetachments,
+              isEmpty,
+              reason: 'same-client lease operations must not overlap',
+            );
+            expect(lease.detachments, ['original/device']);
+            if (!fail) {
+              expect(lease.attachments, ['original/device', 'original/device']);
+              expect(ownership.owns('device'), isTrue);
+            } else {
+              lease.detachError = null;
+              lease.attachGate = null;
+              await ownership.attach('device', leaseId: 'replacement/device');
+              expect(lease.attachments, ['original/device', 'original/device']);
+            }
+            await ownership.detach('device', onLastClient: () async {});
+            expect(ownership.deviceIds, isEmpty);
+          },
+        );
+      }
+    }
+  }
   test(
     'uncertain membership waits, propagates errors and retries original identity',
     () async {
@@ -168,12 +269,14 @@ class _FakeConnectionLease implements QuickBlueLinuxConnectionLease {
   final Object? attachError;
   Object? detachError;
   Completer<void>? attachGate;
+  void Function()? onAttach;
   final List<String> attachments = <String>[];
   final List<String> detachments = <String>[];
 
   @override
   Future<void> attach(String deviceId) async {
     attachments.add(deviceId);
+    onAttach?.call();
     await attachGate?.future;
     if (attachError case final error?) {
       throw error;
