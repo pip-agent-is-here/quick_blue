@@ -50,6 +50,7 @@ Reconnect after explicit detach does not join retired native replies; old events
 and replies cannot release the replacement owner.
 A final explicit disconnect retires queued reconnects; old cleanup preserves
 intentionally newer requests.
+Newer requests wait for complete old cleanup, including notification release.
 
 With [adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary),
 same-adapter clients share final-owner cleanup; different adapters release
