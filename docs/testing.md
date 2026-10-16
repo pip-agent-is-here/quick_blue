@@ -413,6 +413,11 @@ unlock replies, cache replacement and public platform/facade retries. A no-event
 failed-unlock case verifies facade retry completes rather than silently pending.
 Five-second watchdogs and completion markers bound these integrated scenarios;
 the independent adapter's connection and final lease cleanup are asserted.
+Failed-cleanup/reconnect tests additionally assert the actual D-Bus Client name
+is restored before success, same-adapter peer disconnect and close leave the
+reconnected owner live, and final cleanup leaves no names. Controlled ownership
+tests verify pending reattach cannot report success early and a failed reattach
+remains retryable with the original identity.
 `test/src/connection_lease_test.dart` records shared
 D-Bus owners and last-client serialization; adapter tests retain first-powered
 defaults and missing/unpowered/removed explicit selections. Watchdogs bound
