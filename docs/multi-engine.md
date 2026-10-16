@@ -54,6 +54,18 @@ detach, reconnect confirms or restores the original Client name under the existi
 lease lock before reporting success. A same-adapter peer's disconnect or close
 therefore cannot treat that reconnected client as absent. Reattach errors remain
 observable and do not discard the retained cleanup target.
+Same-client registration and detach operations are coordinated locally as well
+as through the existing D-Bus lock: `alreadyOwner` is not mutual exclusion on
+one bus connection. Duplicate pending attaches share registration; an intervening
+detach must settle and membership must be restored before attach succeeds.
+Reconnect retires the preceding native property observer before registration
+and native connect can suspend, so a delayed old disconnect event cannot remove
+the new membership. Concurrent connects share that transition; failed reattach
+restores observation of a retained cleanup target and preserves its primary error.
+Registration errors attempt to release potentially granted Client/Lock names
+even if the successful bus reply was lost. Cleanup failures remain observable
+or logged alongside the primary error; a missing reply is still pending, not a
+successful connection or an implicit native-abort deadline.
 Spontaneous disconnect releases the target before a later connection can select
 a replacement.
 Use matching package revisions for cooperating clients: older remote-address-only
@@ -67,6 +79,12 @@ reentrant native events, and no-event facade retries. Each integrated late-unloc
 scenario has a watchdog and completion marker.
 The failed-cleanup/reconnect matrix also asserts actual bus membership and
 same-adapter peer disconnect/close protection with and without native events.
+`quick_blue_linux/test/reattach_transition_test.dart` additionally holds Client
+registration and final unlock replies while delivering delayed native events,
+checks peer disconnect/close, duplicate initial/retry connects, rejected/error
+replies, retry and complete name cleanup. It also holds native reconnect itself
+after registration. Ownership tests exercise synchronous and microtask callbacks
+during registration without awaiting their own attach waiter.
 These are not physical multi-adapter or cross-version interoperability tests.
 
 The repository has runtime multi-engine integration suites for Android and iOS.

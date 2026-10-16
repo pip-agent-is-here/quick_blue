@@ -418,6 +418,15 @@ is restored before success, same-adapter peer disconnect and close leave the
 reconnected owner live, and final cleanup leaves no names. Controlled ownership
 tests verify pending reattach cannot report success early and a failed reattach
 remains retryable with the original identity.
+`test/reattach_transition_test.dart` extends this to delayed native disconnect
+events during pending Client-registration and final-unlock replies, peer
+disconnect/close, duplicate initial and retry connects, registration rejection,
+transport errors before/after name acquisition, and native-connect suspension.
+Pending replies cannot report success; error paths remain retryable and successful
+cleanup leaves no Client/Lock names. Ownership tests invoke detach synchronously
+and in a microtask inside lease registration, checking same-client serialization,
+intervening teardown and original-identity restoration without a waiter cycle.
+The five-second scenario watchdog is a test bound, not a production abort timeout.
 `test/src/connection_lease_test.dart` records shared
 D-Bus owners and last-client serialization; adapter tests retain first-powered
 defaults and missing/unpowered/removed explicit selections. Watchdogs bound

@@ -46,6 +46,7 @@ and troubleshooting. For specific operations, see:
 - [Multiple Flutter engines](docs/multi-engine.md)
 - [L2CAP sockets](docs/l2cap.md)
 
+
 With [adapter-scoped connection ownership](docs/multi-engine.md#verification-boundary),
 same-adapter clients share final-owner cleanup; different adapters release
 independently. Cooperating clients require matching revisions.
@@ -54,6 +55,8 @@ Pending/reentrant teardown and late unlock failure retain the native target
 through retry.
 Failed-teardown reconnect restores membership while retaining that target,
 protecting it from peer disconnect or close.
+The old native observer is retired so delayed disconnect events cannot disturb
+pending reattachment.
 
 ## Try the BLE explorer
 

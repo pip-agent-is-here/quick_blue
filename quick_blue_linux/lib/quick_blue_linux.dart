@@ -170,6 +170,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   final Map<String, BlueZDevice> _devices = <String, BlueZDevice>{};
   // Native targets follow the held lease, not the refreshable discovery cache.
   final Map<String, BlueZDevice> _ownedDevices = <String, BlueZDevice>{};
+  final Map<String, Future<void>> _connecting = <String, Future<void>>{};
   final _DevicePropertySubscriptions _devicePropertySubscriptions =
       <String, _BlueZPropertySubscription>{};
   final Map<String, bool> _lastConnectionState = <String, bool>{};
@@ -419,14 +420,46 @@ class QuickBlueLinux extends QuickBluePlatform {
   @override
   Future<void> connect(String deviceId) async {
     await _ensureInitialized();
+    await (_connecting[deviceId] ??= Future<void>.microtask(() async {
+      try {
+        await _connect(deviceId);
+      } finally {
+        _connecting.remove(deviceId);
+      }
+    }));
+  }
+
+  Future<void> _connect(String deviceId) async {
     final device = _getDeviceOrThrow(deviceId);
+
+    // This observer belongs to the previous connection. Retire it before lease
+    // registration/native connect can suspend, so a delayed disconnected event
+    // cannot release the new membership. In-flight detach is joined by attach.
+    await _cancelMappedSubscription(_devicePropertySubscriptions, deviceId);
 
     // Capture the actual BlueZ adapter, including for default selection. Retain
     // this identity through detach even if the cached device is later replaced.
-    await _connectionOwnership.attach(
-      deviceId,
-      leaseId: '${device.adapter.address}/$deviceId',
-    );
+    try {
+      await _connectionOwnership.attach(
+        deviceId,
+        leaseId: '${device.adapter.address}/$deviceId',
+      );
+    } catch (error, stackTrace) {
+      // Failed reattach retains the cleanup target. Keep observing it for a
+      // later spontaneous disconnect, without hiding the registration error.
+      if (_connectionOwnership.owns(deviceId)) {
+        try {
+          await _watchDeviceProperties(device);
+        } catch (watchError, watchStack) {
+          _logger.warning(
+            'Unable to restore device observer',
+            watchError,
+            watchStack,
+          );
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     _ownedDevices.putIfAbsent(deviceId, () => device);
 
     try {

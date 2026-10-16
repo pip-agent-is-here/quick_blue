@@ -12,6 +12,11 @@
 
 ### Headless Linux
 
+- Coordinate pending attach with native-event detach and coalesce concurrent
+  connects. Retire the preceding native observer before reconnect registration
+  and native connect suspend; do not report successful membership after an
+  intervening teardown. Preserve original-target retry and visible errors;
+  attempt cleanup of names granted before a failed registration reply.
 - Restore actual D-Bus Client membership before reconnect succeeds after failed
   teardown; retained cleanup identity alone is not an active lease. Preserve
   same-adapter peer disconnect/close protection, original native targets and
