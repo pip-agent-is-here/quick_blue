@@ -5,6 +5,9 @@
 
 ### Fixed
 
+- Classify Darwin GATT native `Disconnected` failures as `remoteDisconnected`
+  without inferring causes from messages or changing security/cancellation errors.
+
 - Isolate Flutter template bootstrap from external Linux consumer dependency
   resolution, retaining the assertion that the consumer Pub cache starts empty.
 
