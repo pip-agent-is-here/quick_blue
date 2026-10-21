@@ -441,6 +441,9 @@ Future<T> _runDarwinGattOperation<T>({
     Error.throwWithStackTrace(
       QuickBlueException(
         code: _darwinErrorCode(error.code),
+        failureReason: error.code == 'Disconnected'
+            ? QuickBlueFailureReason.remoteDisconnected
+            : null,
         operation: operation,
         deviceId: deviceId,
         serviceId: serviceId,
