@@ -40,7 +40,11 @@ pair in this example (see [pairing](pairing.md#headless-linux-agent-lifecycle)).
 After a reported service-database change, new reads, writes and explicit
 notification changes fail with `invalidState` before platform submission.
 `notifications()` checks at listen time, including a retained stream. Rediscover
-and resolve a fresh bound handle. Chunked writes check each chunk; already
+and resolve a fresh bound handle. Every native submission rechecks validity,
+including retries after coordinated security recovery and notification setup
+waiting behind earlier lifecycle work. Invalidation during recovery prevents the
+retry with `invalidState`; it does not undo the first rejected request or disable
+security recovery for valid or direct-ID handles. Chunked writes check each chunk; already
 submitted IO is not rolled back. Raw `valueStream` routing and active notification
 subscriptions are not automatically ended by this guard.
 
@@ -50,6 +54,11 @@ handle does not gain the new guard. Disconnect/reconnect alone retains the
 existing snapshot generation policy; it is not an invalidation event. Pure-Dart
 tests and Linux fake-client call counters check these guards; they do not test
 remote device behavior.[^source1][^source2]
+
+The [held-recovery regressions](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_platform_interface/test/snapshot_security_retry_test.dart)
+cover invalidation during read, write, explicit notification change and stream
+setup recovery, plus direct-ID and still-valid bound controls. These check platform
+submission counts and terminal stream errors, not native security negotiation.
 
 ## Notifications own their teardown
 
@@ -63,8 +72,11 @@ await notifications.cancel();
 ```
 
 Concurrent listeners share native setup; the final listener requests its release.
-Linux has reproduced [fake-BlueZ teardown gaps](limitations.md#linux-gatt-teardown-characterization);
-do not interpret cancellation as proof of native cleanup. Use
+Linux tracks native claims independently of replaceable property watches and
+discovery caches. Queued client release follows pending reconfiguration in the
+same lifetime, but cannot stop a newer generation's claim. The
+[fake-BlueZ regressions](limitations.md#linux-gatt-teardown-characterization)
+are not proof of hardware cleanup or notification delivery. Use
 `valueStream` plus `setNotifiable(...)` only when setup/teardown must be managed
 separately (listen before enabling).
 

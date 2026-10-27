@@ -133,8 +133,7 @@ class QuickBlueLinux extends QuickBluePlatform {
       }
     }
 
-    await release(() => _scanSession.stop(_scanAdapter));
-    _scanAdapter = null;
+    await release(() => _serializeScan(_stopScan));
     for (final deviceId in _connectionOwnership.deviceIds) {
       await release(() => disconnect(deviceId));
     }
@@ -183,6 +182,7 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   BlueZAdapter? _activeAdapter;
   BlueZAdapter? _scanAdapter;
+  Future<void>? _scanOperation;
   late final LinuxScanSession _scanSession;
   late final LinuxGattSession _gattSession;
   late final LinuxL2capEndpoint _l2capEndpoint;
@@ -351,8 +351,11 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> startScan({
     ScanFilter scanFilter = ScanFilter.empty,
     ScanOptions scanOptions = ScanOptions.defaults,
-  }) async {
+  }) => _serializeScan(() async {
     await _ensureInitialized();
+    // A failed release must finish against its original adapter before a new
+    // scan can replace ownership, even when adapter selection has changed.
+    if (_scanAdapter != null) await _stopScan();
 
     _activeAdapter = _selectPoweredAdapter();
     final adapter = _activeAdapter;
@@ -366,14 +369,31 @@ class QuickBlueLinux extends QuickBluePlatform {
 
     await _scanSession.start(adapter, scanFilter, scanOptions);
     _scanAdapter = adapter;
-  }
+  });
 
   @override
-  Future<void> stopScan() async {
+  Future<void> stopScan() => _serializeScan(() async {
     await _ensureInitialized();
+    await _stopScan();
+  });
+
+  Future<void> _stopScan() async {
     final adapter = _scanAdapter;
-    _scanAdapter = null;
     await _scanSession.stop(adapter);
+    _scanAdapter = null;
+  }
+
+  Future<void> _serializeScan(Future<void> Function() action) async {
+    final previous = _scanOperation;
+    final done = Completer<void>();
+    _scanOperation = done.future;
+    try {
+      await previous;
+      await action();
+    } finally {
+      done.complete();
+      if (identical(_scanOperation, done.future)) _scanOperation = null;
+    }
   }
 
   void _onDeviceAdd(BlueZDevice device) {

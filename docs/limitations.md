@@ -25,20 +25,21 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
 ## Linux GATT teardown characterization
 
 Linux teardown cancels pending discovery and retires late notification setup.
-The regression and `characterization:` tests in
+The regression tests in
 [`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/gatt_session_test.dart)
-distinguish corrected lifetime behavior from the remaining gap with fake BlueZ objects:
+check lifetime behavior with fake BlueZ objects:
 
 | Controlled ordering | Observed fake-BlueZ result |
 | --- | --- |
 | Pending `ServicesResolved`, then clear, replacement discovery, then old resolution | Old discovery fails with `cancelled`; only replacement discovery emits completion, and the old property listener is removed. |
 | `StartNotify` suspended until client release and clear finish | Resumed setup fails with `cancelled`, releases its late claim exactly once and installs no watch or value delivery. |
-| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Release and clear make zero `StopNotify` calls and the fake stays notifying, although clear removes its listener. Cache-intact control makes exactly one call and stops notifying. |
+| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Native claim survives cache invalidation; release calls `StopNotify` once and clear removes the local listener. |
+| Hold a second `StartNotify`, queue public disconnect, then return success or `AlreadyExists` | Disconnect waits for reconfiguration and releases this client's claim once, even though setup replaces its property watch. Another client's connection and native notification claim survive. A failed reconfiguration retains the original claim for release. |
 
 Run the current regression suite from the repository root:
 
 ```sh
-(cd quick_blue_linux && flutter test test/gatt_session_test.dart --reporter expanded)
+(cd quick_blue_linux && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart --reporter expanded)
 ```
 
 
@@ -51,10 +52,11 @@ a watch or delivering values. These corrections are part of the headless Linux
 lifecycle implementation. Fake-BlueZ tests do not prove real BlueZ cleanup,
 D-Bus ownership release or hardware semantics.
 
-The cache-invalidated final-release gap remains characterized: release must
-eventually stop the old characteristic exactly once and remove its listener
-without re-resolution, but the current implementation still loses that native
-release when its characteristic cache has already been cleared.
+Native claim identity is separate from local property-subscription identity and
+the discovery cache. Controlled reconfiguration tests in
+[notification_reconfiguration_test.dart](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/notification_reconfiguration_test.dart) assert public
+disconnect completion and external fake native ownership, not only local maps.
+They do not exercise real D-Bus reference counting or physical notification delivery.
 
 
 ## Verification gaps

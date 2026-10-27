@@ -22,7 +22,9 @@ Linux supports explicit adapter addresses and client shutdown; see
 [adapter selection](docs/scanning.md#linux-adapter-selection) and
 [cleanup](docs/connections.md#linux-client-shutdown).
 Use opt-in [snapshot-bound handles](docs/gatt.md#snapshot-bound-submissions) to reject
-new IO after GATT invalidation. The [headless operator CLI](quick_blue_linux/example/README.md)
+new IO after GATT invalidation, including security-recovery retries. Linux retains
+native notification ownership across watch replacement and retries failed scan
+stops against the original adapter. The [headless operator CLI](quick_blue_linux/example/README.md)
 provides adapter/device selection and opt-in pairing, reads, writes and notifications.
 [ARM64 cross-build and emulator checks](docs/testing.md#arm64-build-and-controlled-runtime)
 do not test a physical Raspberry Pi or Bluetooth radio.

@@ -403,6 +403,15 @@ stale opt-in bound handles rejecting before IO, late notification setup and
 final-listener cleanup and overlapping retired-setup/retry claim ordering.
 Delayed client StopNotify cleanup also serializes with clear/retry, including
 native stop failures, so a retired release cannot disable the retry claim.
+`test/notification_reconfiguration_test.dart` holds a second StartNotify through
+public disconnect, with AlreadyExists/success/error replies and both replacement
+orders; it asserts native claim release while a peer's claim and connection remain.
+`test/scan_session_test.dart` checks failed-stop retries against the original
+adapter and serialized old-stop/new-start, adapter replacement, pending-start/stop
+and duplicate-stop orderings. Shared interface
+`test/snapshot_security_retry_test.dart` invalidates bound handles during held
+security recovery for read/write/notification operations and retains direct-ID
+and still-valid recovery controls.
 Adapter tests cover the same remote address on multiple adapters without foreign
 native connect submissions. `test/adapter_lease_test.dart` integrates the real
 D-Bus lease with fake bus/BlueZ clients: different adapters disconnect independently,

@@ -12,6 +12,14 @@
 
 ### Headless Linux
 
+- Revalidate snapshot-bound handles before every security-recovery submission,
+  including notification setup; retain direct-ID recovery and acquired teardown.
+- Track native notification claims independently of replaceable property watches
+  and characteristic caches. Pending reconfiguration cannot skip disconnect's
+  queued release or stop another client's or newer generation's claim.
+- Retain the exact discovery adapter after failed StopDiscovery. Serialize scan
+  start/stop/shutdown; release the preceding scan before starting a replacement.
+
 - Retire connection-state deduplication only after all asynchronous device clear
   and native-observer cleanup completes. A delayed native disconnected event
   cannot suppress terminal completion for a joining facade disconnect. Preserve

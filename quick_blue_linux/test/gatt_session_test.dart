@@ -124,31 +124,27 @@ void main() {
     expect(f.characteristic.properties.hasListener, isFalse);
   });
 
-  test(
-    'characterization: cache invalidation loses last notification release',
-    () async {
-      f.session.watchDevice(f.device);
-      await f.notify();
-      expect(f.characteristic.starts, 1);
-      f.device.servicesResolved = false;
-      f.session.servicesResolvedChanged(f.device);
-      expect(f.changes, [f.device.address]);
-      expect(f.characteristic.properties.hasListener, isTrue);
-      await f.session.stopNotificationsForClient(f.device.address);
-      expect(f.characteristic.stops, 0);
-      expect(f.characteristic.notifying, isTrue);
-      await f.session.clearDevice(f.device.address);
-      expect(f.characteristic.properties.hasListener, isFalse);
-      expect(f.characteristic.stops, 0);
-      // Control: with the cache intact, the same final-client release reaches BlueZ.
-      f.device.servicesResolved = true;
-      await f.notify();
-      await f.session.stopNotificationsForClient(f.device.address);
-      expect(f.characteristic.stops, 1);
-      expect(f.characteristic.notifying, isFalse);
-      // Desired correction: release ownership must survive cache invalidation.
-    },
-  );
+  test('notification ownership survives cache invalidation', () async {
+    f.session.watchDevice(f.device);
+    await f.notify();
+    expect(f.characteristic.starts, 1);
+    f.device.servicesResolved = false;
+    f.session.servicesResolvedChanged(f.device);
+    expect(f.changes, [f.device.address]);
+    expect(f.characteristic.properties.hasListener, isTrue);
+    await f.session.stopNotificationsForClient(f.device.address);
+    expect(f.characteristic.stops, 1);
+    expect(f.characteristic.notifying, isFalse);
+    await f.session.clearDevice(f.device.address);
+    expect(f.characteristic.properties.hasListener, isFalse);
+    expect(f.characteristic.stops, 1);
+    // Control: with the cache intact, the same final-client release reaches BlueZ.
+    f.device.servicesResolved = true;
+    await f.notify();
+    await f.session.stopNotificationsForClient(f.device.address);
+    expect(f.characteristic.stops, 2);
+    expect(f.characteristic.notifying, isFalse);
+  });
 
   test('failed discovery releases waiter and allows retry', () async {
     f.device.servicesResolved = false;

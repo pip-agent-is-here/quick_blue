@@ -165,3 +165,10 @@ a retry waits for retired native setup and cleanup before acquiring its claim,
 so old cleanup cannot disable the new generation. A stalled native setup still
 requires native completion; serialization is not an abort or deadline. Tests use
 fake BlueZ clients; hardware disconnect and notification delivery remain untested.
+
+Native notification claims survive replacement of their local property watch
+and GATT cache invalidation. Disconnect's queued release still stops this client's
+claim after an earlier reconfiguration succeeds or reports `AlreadyExists`;
+a reconfiguration error does not discard the existing claim. Independent clients
+keep their native notification ownership and connection. See the controlled
+[teardown cases](limitations.md#linux-gatt-teardown-characterization).

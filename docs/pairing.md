@@ -88,6 +88,13 @@ once after successful recovery. Android first observes implicit bonding for a
 bounded period before attempting explicit bonding; calling `pair()` preemptively
 is not required for a protected GATT access.
 
+Opt-in [snapshot-bound handles](gatt.md#snapshot-bound-submissions) recheck validity
+before the retry, not just before recovery. If the database changes while recovery
+is pending, read/write/notification setup fails with `invalidState` without a second
+native request. Direct-ID handles and still-valid bound handles retain the normal
+coordinated retry. Notification cancellation still releases an acquired claim even
+if its originating snapshot has since become invalid.
+
 Do not blindly replay writes for arbitrary transport failures. The security retry
 contract concerns a write rejected before application, not proof that a timed-out
 write had no side effects.

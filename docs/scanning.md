@@ -80,5 +80,16 @@ unpowered or removed adapter never falls back to another. Scan results and
 device resolution are scoped to an explicit selection, including when multiple
 adapters know the same remote address; foreign add/remove events cannot replace
 or clear the selected device. Stop retains the adapter
-that started discovery even if availability changes. Local BlueZ fakes test
+that started discovery even if availability changes. A failed native stop keeps
+that exact target for retry, while local result watches are canceled. Direct Linux
+start/stop requests are serialized in call order: a start waits for preceding
+stop completion and releases any retained scan before selecting a new adapter.
+A queued stop after an in-flight start releases that scan after start completes;
+old cleanup cannot clear a newer scan's filters or target. A failed release is
+observable and must succeed before a replacement scan starts. Shutdown uses the
+same queue; it does not abort stalled native calls. Local BlueZ fakes test
 these contracts; adapter removal/radio behavior remains unverified.[^source4]
+
+The [scan lifecycle regressions](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/scan_session_test.dart)
+hold native start/stop replies, inject a failed stop, remove/replace adapters and
+assert retries, queued starts, independent filter/watch state and final stop calls.

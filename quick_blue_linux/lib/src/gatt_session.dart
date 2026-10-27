@@ -46,6 +46,8 @@ class LinuxGattSession {
   // Survives clearDevice: retired native setup must settle and release its
   // client claim before a new generation can acquire the same claim.
   final Map<String, Future<void>> _notificationOperations = {};
+  // Native ownership outlives replaceable property watches and GATT caches.
+  final Map<String, Map<String, _NotificationClaim>> _notificationClaims = {};
 
   Completer<void> _cancellation(String deviceId) =>
       _deviceCancellations.putIfAbsent(deviceId, Completer<void>.new);
@@ -162,6 +164,7 @@ class LinuxGattSession {
           action: targetCharacteristic.stopNotify,
         );
       }
+      _notificationClaims[deviceId]?.remove(key);
       await _removeNotificationSubscription(deviceId, key);
       return;
     }
@@ -196,9 +199,19 @@ class LinuxGattSession {
       // This D-Bus client already enabled notifications.
     }
 
+    final claims = _notificationClaims.putIfAbsent(deviceId, () => {});
+    final existingClaim = claims[key];
+    final claim =
+        existingClaim != null &&
+            identical(existingClaim.cancellation, cancellation)
+        ? existingClaim
+        : _NotificationClaim(targetCharacteristic, cancellation);
+    claims[key] = claim;
+
     if (cancellation.isCompleted) {
       try {
         await targetCharacteristic.stopNotify();
+        if (identical(claims[key], claim)) claims.remove(key);
       } catch (error, stack) {
         _logger.warning('Late notification cleanup failed', error, stack);
       }
@@ -477,31 +490,25 @@ class LinuxGattSession {
   }
 
   Future<void> stopNotificationsForClient(String deviceId) async {
-    final subscriptions = Map<String, _BlueZPropertySubscription>.of(
-      _notificationSubscriptions[deviceId] ?? {},
+    final claims = Map<String, _NotificationClaim>.of(
+      _notificationClaims[deviceId] ?? {},
     );
     // Enqueue every release before yielding. Both setup and teardown share this
     // boundary across clearDevice generations; a late native stop must finish
     // before a retry can acquire the same D-Bus client's notification claim.
     final releases = <Future<void>>[];
-    for (final entry in subscriptions.entries) {
+    for (final entry in claims.entries) {
       final key = entry.key;
-      final resolved = _resolvedCharacteristics['$deviceId|$key'];
-      if (resolved == null) {
-        continue;
-      }
       releases.add(
         _serializeNotification('$deviceId/$key', () async {
-          // A queued release belongs only to the subscription captured above,
-          // never to a replacement installed while it waited.
-          if (!identical(
-            _notificationSubscriptions[deviceId]?[key],
-            entry.value,
-          )) {
+          // Reconfiguration in this lifetime can replace the local watch, not
+          // this client's native claim. Never release a newer generation.
+          if (!identical(_notificationClaims[deviceId]?[key], entry.value)) {
             return;
           }
           try {
-            await resolved.characteristic.stopNotify();
+            await entry.value.characteristic.stopNotify();
+            _notificationClaims[deviceId]?.remove(key);
           } on Object catch (error, stackTrace) {
             _logger.warning(
               'Failed to release this engine\'s notification for $deviceId',
@@ -596,6 +603,13 @@ Future<T> _runBlueZGattOperation<T>({
       stackTrace,
     );
   }
+}
+
+class _NotificationClaim {
+  _NotificationClaim(this.characteristic, this.cancellation);
+
+  final BlueZGattCharacteristic characteristic;
+  final Completer<void> cancellation;
 }
 
 class _ResolvedCharacteristic {

@@ -76,15 +76,15 @@ class BluetoothCharacteristic {
       serviceId: serviceId,
       characteristicId: characteristicId,
       inputProperty: bleInputProperty,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.setNotifiable(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('setNotifiable');
+        return _platform.setNotifiable(
           deviceId,
           serviceId,
           characteristicId,
           bleInputProperty,
-        ),
-      ),
+        );
+      }),
     );
   }
 
@@ -131,6 +131,9 @@ class BluetoothCharacteristic {
         serviceId,
         characteristicId,
         bleInputProperty: bleInputProperty,
+        beforeSubmission: _isValidSnapshot == null
+            ? null
+            : () => _ensureSnapshotValid('notifications'),
       ),
       valueSize: (value) => value.length,
     );
@@ -147,14 +150,14 @@ class BluetoothCharacteristic {
       deviceId: deviceId,
       serviceId: serviceId,
       characteristicId: characteristicId,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.readCharacteristicValue(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('read');
+        return _platform.readCharacteristicValue(
           deviceId,
           serviceId,
           characteristicId,
-        ),
-      ),
+        );
+      }),
       measurements: (value) => <QuickBlueOperationMeasurement, num>{
         QuickBlueOperationMeasurement.byteCount: value.length,
       },
@@ -186,16 +189,16 @@ class BluetoothCharacteristic {
       characteristicId: characteristicId,
       outputProperty: bleOutputProperty,
       valueSize: value.length,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.writeValue(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('write');
+        return _platform.writeValue(
           deviceId,
           serviceId,
           characteristicId,
           value,
           bleOutputProperty,
-        ),
-      ),
+        );
+      }),
     );
   }
 

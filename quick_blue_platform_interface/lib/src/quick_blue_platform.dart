@@ -626,16 +626,22 @@ abstract class QuickBluePlatform extends PlatformInterface {
       CharacteristicLifecycleCoordinator(
         setNotifiable: setNotifiable,
         setNotifiableWithSecurityRecovery:
-            (deviceId, service, characteristic, bleInputProperty) {
-              return runWithSecurityRecovery(
-                deviceId,
-                () => setNotifiable(
+            (
+              deviceId,
+              service,
+              characteristic,
+              bleInputProperty,
+              beforeSubmission,
+            ) {
+              return runWithSecurityRecovery(deviceId, () {
+                beforeSubmission?.call();
+                return setNotifiable(
                   deviceId,
                   service,
                   characteristic,
                   bleInputProperty,
-                ),
-              );
+                );
+              });
             },
       );
 
@@ -664,17 +670,21 @@ abstract class QuickBluePlatform extends PlatformInterface {
   /// Streams for the same characteristic share one native notification
   /// lifecycle. The first listener enables updates and the last listener to
   /// cancel disables them.
+  /// [beforeSubmission] validates an opt-in bound handle before setup or retry;
+  /// it does not guard teardown of an already acquired notification claim.
   Stream<Uint8List> characteristicNotifications(
     String deviceId,
     String service,
     String characteristic, {
     BleInputProperty bleInputProperty = BleInputProperty.notification,
+    void Function()? beforeSubmission,
   }) {
     return _characteristicLifecycleCoordinator.notifications(
       deviceId,
       service,
       characteristic,
       bleInputProperty: bleInputProperty,
+      beforeSubmission: beforeSubmission,
     );
   }
 
