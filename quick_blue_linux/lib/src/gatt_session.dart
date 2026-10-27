@@ -164,7 +164,11 @@ class LinuxGattSession {
           action: targetCharacteristic.stopNotify,
         );
       }
-      _notificationClaims[deviceId]?.remove(key);
+      final claim = _notificationClaims[deviceId]?[key];
+      if (claim != null) {
+        claim.characteristics.remove(targetCharacteristic);
+        await _releaseNotificationClaim(deviceId, key, claim);
+      }
       await _removeNotificationSubscription(deviceId, key);
       return;
     }
@@ -205,16 +209,22 @@ class LinuxGattSession {
         existingClaim != null &&
             identical(existingClaim.cancellation, cancellation)
         ? existingClaim
-        : _NotificationClaim(targetCharacteristic, cancellation);
+        : _NotificationClaim(cancellation);
+    claim.characteristics.add(targetCharacteristic);
     claims[key] = claim;
 
+    // A UUID can resolve to a different native endpoint after rediscovery.
+    // Keep the lifetime identity (queued release owns it), but retire acquired
+    // obsolete endpoints without losing the newly acquired target on failure.
+    await _releaseNotificationClaim(
+      deviceId,
+      key,
+      claim,
+      except: targetCharacteristic,
+    );
+
     if (cancellation.isCompleted) {
-      try {
-        await targetCharacteristic.stopNotify();
-        if (identical(claims[key], claim)) claims.remove(key);
-      } catch (error, stack) {
-        _logger.warning('Late notification cleanup failed', error, stack);
-      }
+      await _releaseNotificationClaim(deviceId, key, claim);
       _checkCurrent(deviceId, cancellation);
     }
     await _removeNotificationSubscription(deviceId, key);
@@ -501,25 +511,43 @@ class LinuxGattSession {
       final key = entry.key;
       releases.add(
         _serializeNotification('$deviceId/$key', () async {
-          // Reconfiguration in this lifetime can replace the local watch, not
-          // this client's native claim. Never release a newer generation.
+          // Reconfiguration can replace both watch and native endpoint. The
+          // lifetime record includes preceding acquisitions, not newer ones.
           if (!identical(_notificationClaims[deviceId]?[key], entry.value)) {
             return;
           }
-          try {
-            await entry.value.characteristic.stopNotify();
-            _notificationClaims[deviceId]?.remove(key);
-          } on Object catch (error, stackTrace) {
-            _logger.warning(
-              'Failed to release this engine\'s notification for $deviceId',
-              error,
-              stackTrace,
-            );
-          }
+          await _releaseNotificationClaim(deviceId, key, entry.value);
         }),
       );
     }
     await Future.wait(releases);
+  }
+
+  Future<void> _releaseNotificationClaim(
+    String deviceId,
+    String key,
+    _NotificationClaim claim, {
+    BlueZGattCharacteristic? except,
+  }) async {
+    for (final target in claim.characteristics.toList()) {
+      if (identical(target, except)) continue;
+      try {
+        await target.stopNotify();
+        claim.characteristics.remove(target);
+      } on Object catch (error, stackTrace) {
+        // An obsolete endpoint may no longer exist. Its failure must not
+        // prevent release of the current endpoint; retain it for a later try.
+        _logger.warning(
+          'Failed to release this engine\'s notification for $deviceId',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    if (claim.characteristics.isEmpty &&
+        identical(_notificationClaims[deviceId]?[key], claim)) {
+      _notificationClaims[deviceId]?.remove(key);
+    }
   }
 
   Future<void> _removeNotificationSubscription(
@@ -606,9 +634,9 @@ Future<T> _runBlueZGattOperation<T>({
 }
 
 class _NotificationClaim {
-  _NotificationClaim(this.characteristic, this.cancellation);
+  _NotificationClaim(this.cancellation);
 
-  final BlueZGattCharacteristic characteristic;
+  final characteristics = Set<BlueZGattCharacteristic>.identity();
   final Completer<void> cancellation;
 }
 

@@ -12,6 +12,9 @@
 
 ### Headless Linux
 
+- Track actual acquired notification endpoints across same-UUID rediscovery.
+  Retire obsolete targets without losing the current claim on cleanup failure;
+  queued disconnect releases preceding replacement setup while preserving peers.
 - Revalidate snapshot-bound handles before every security-recovery submission,
   including notification setup; retain direct-ID recovery and acquired teardown.
 - Track native notification claims independently of replaceable property watches

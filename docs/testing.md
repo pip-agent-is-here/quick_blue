@@ -406,6 +406,11 @@ native stop failures, so a retired release cannot disable the retry claim.
 `test/notification_reconfiguration_test.dart` holds a second StartNotify through
 public disconnect, with AlreadyExists/success/error replies and both replacement
 orders; it asserts native claim release while a peer's claim and connection remain.
+`test/notification_target_replacement_test.dart` replaces a characteristic with
+the same UUID after cache invalidation. Settled/held setup, setup failure and
+obsolete-target stop errors check actual current/old native ownership and public
+disconnect completion while a peer retains the connection; same-target controls
+retain stable ownership through local watch replacement.
 `test/scan_session_test.dart` checks failed-stop retries against the original
 adapter and serialized old-stop/new-start, adapter replacement, pending-start/stop
 and duplicate-stop orderings. Shared interface

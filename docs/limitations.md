@@ -35,11 +35,12 @@ check lifetime behavior with fake BlueZ objects:
 | `StartNotify` suspended until client release and clear finish | Resumed setup fails with `cancelled`, releases its late claim exactly once and installs no watch or value delivery. |
 | Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Native claim survives cache invalidation; release calls `StopNotify` once and clear removes the local listener. |
 | Hold a second `StartNotify`, queue public disconnect, then return success or `AlreadyExists` | Disconnect waits for reconfiguration and releases this client's claim once, even though setup replaces its property watch. Another client's connection and native notification claim survive. A failed reconfiguration retains the original claim for release. |
+| Invalidate resolution, replace the native characteristic with the same UUID, enable, then disconnect (setup settled or held) | The obsolete acquisition is stopped and the current acquisition is released. An obsolete-target stop error cannot skip current-target release. Failed replacement setup retains the preceding acquisition for disconnect. Peer's notification claim and connection survive. |
 
 Run the current regression suite from the repository root:
 
 ```sh
-(cd quick_blue_linux && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart --reporter expanded)
+(cd quick_blue_linux && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart test/notification_target_replacement_test.dart --reporter expanded)
 ```
 
 
@@ -57,6 +58,10 @@ the discovery cache. Controlled reconfiguration tests in
 [notification_reconfiguration_test.dart](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/notification_reconfiguration_test.dart) assert public
 disconnect completion and external fake native ownership, not only local maps.
 They do not exercise real D-Bus reference counting or physical notification delivery.
+The [native-target replacement tests](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/notification_target_replacement_test.dart)
+also distinguish lifetime identity from native endpoint identity, including an
+obsolete endpoint that throws during stop. These are fake ownership assertions,
+not hardware proof or a guarantee that a failed native stop eventually succeeds.
 
 
 ## Verification gaps

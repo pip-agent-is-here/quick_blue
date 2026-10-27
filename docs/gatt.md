@@ -73,7 +73,11 @@ await notifications.cancel();
 
 Concurrent listeners share native setup; the final listener requests its release.
 Linux tracks native claims independently of replaceable property watches and
-discovery caches. Queued client release follows pending reconfiguration in the
+discovery caches. Same-UUID rediscovery can resolve a different native endpoint:
+successful setup records that acquisition and attempts to retire obsolete targets.
+An obsolete target's stop failure is logged without preventing current-target
+release; failed releases remain recorded for a later attempt.
+Queued client release follows pending reconfiguration in the
 same lifetime, but cannot stop a newer generation's claim. The
 [fake-BlueZ regressions](limitations.md#linux-gatt-teardown-characterization)
 are not proof of hardware cleanup or notification delivery. Use
