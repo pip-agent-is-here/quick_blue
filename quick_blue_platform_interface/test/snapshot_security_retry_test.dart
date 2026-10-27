@@ -7,6 +7,86 @@ import 'package:test/test.dart';
 import 'test_support/fake_quick_blue_platform.dart';
 
 void main() {
+  test(
+    'invalidated queued notification listener cannot acquire a peer claim',
+    () async {
+      final gate = Completer<void>();
+      final platform = FakeQuickBluePlatform(
+        setNotifiableCompletions: [gate],
+        discoveredServices: [
+          BluetoothService(
+            deviceId: 'device-a',
+            uuid: 'service-a',
+            characteristics: const ['characteristic-a'],
+          ),
+        ],
+      );
+      addTearDown(platform.dispose);
+      final device = platform.device('device-a');
+      final gatt = await device.discoverGatt();
+      final direct = device.characteristic('service-a', 'characteristic-a');
+      final peer = direct.notifications().listen((_) {});
+      await pumpEventQueue();
+      final errors = <Object>[];
+      var done = false;
+      final bound = gatt
+          .boundCharacteristic('characteristic-a')
+          .notifications()
+          .listen(
+            (_) {},
+            onError: errors.add,
+            onDone: () {
+              done = true;
+            },
+          );
+      await pumpEventQueue();
+      platform.handleGattServicesChanged('device-a');
+      gate.complete();
+      await pumpEventQueue();
+      await bound.cancel();
+      final beforePeerCancel = List<String>.of(platform.calls);
+      await peer.cancel();
+      expect(errors, [
+        isA<QuickBlueException>().having(
+          (e) => e.code,
+          'code',
+          QuickBlueErrorCode.invalidState,
+        ),
+      ]);
+      expect(done, isTrue);
+      expect(
+        beforePeerCancel.where((c) => c.startsWith('setNotifiable')),
+        hasLength(1),
+      );
+      expect(platform.calls.where((c) => c.endsWith('disabled')), hasLength(1));
+    },
+  );
+
+  test(
+    'invalidation does not block teardown of an acquired bound claim',
+    () async {
+      final platform = FakeQuickBluePlatform(
+        discoveredServices: [
+          BluetoothService(
+            deviceId: 'device-a',
+            uuid: 'service-a',
+            characteristics: const ['characteristic-a'],
+          ),
+        ],
+      );
+      addTearDown(platform.dispose);
+      final gatt = await platform.device('device-a').discoverGatt();
+      final subscription = gatt
+          .boundCharacteristic('characteristic-a')
+          .notifications()
+          .listen((_) {});
+      await pumpEventQueue();
+      platform.handleGattServicesChanged('device-a');
+      await subscription.cancel();
+      expect(platform.calls.where((c) => c.endsWith('disabled')), hasLength(1));
+    },
+  );
+
   for (final operation in ['read', 'write', 'setNotifiable', 'notifications']) {
     for (final binding in ['bound', 'direct', 'valid-bound']) {
       test('$operation security retry respects $binding snapshot', () async {
