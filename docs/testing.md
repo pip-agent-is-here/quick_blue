@@ -411,6 +411,13 @@ the same UUID after cache invalidation. Settled/held setup, setup failure and
 obsolete-target stop errors check actual current/old native ownership and public
 disconnect completion while a peer retains the connection; same-target controls
 retain stable ownership through local watch replacement.
+`test/notification_native_proxy_test.dart` uses real BlueZ characteristic/object
+wrappers over a controlled D-Bus method boundary: same wrapper, fresh wrappers
+over one object, and recreated objects at one path. It checks the native claim
+at successful setup completion, confirmation after retirement, held confirmation
+and failure, stop errors with side effects, and public disconnect ordering while
+peer ownership remains. These are deterministic dispatch tests, not real bus or
+hardware verification.
 `test/scan_session_test.dart` checks failed-stop retries against the original
 adapter and serialized old-stop/new-start, adapter replacement, pending-start/stop
 and duplicate-stop orderings. Shared interface

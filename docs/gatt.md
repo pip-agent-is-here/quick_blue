@@ -75,6 +75,12 @@ Concurrent listeners share native setup; the final listener requests its release
 Linux tracks native claims independently of replaceable property watches and
 discovery caches. Same-UUID rediscovery can resolve a different native endpoint:
 successful setup records that acquisition and attempts to retire obsolete targets.
+Different BlueZ wrappers can also address the same native endpoint. After any
+retirement attempt, setup confirms the current acquisition with `StartNotify`
+(accepting `AlreadyExists`) before reporting success, so retirement cannot undo
+its own successful setup. Confirmation failure propagates; recorded acquisitions
+remain available for client release. This may briefly interrupt this client's
+notifications during rediscovery; it is not an atomic native handoff.
 An obsolete target's stop failure is logged without preventing current-target
 release; failed releases remain recorded for a later attempt.
 Queued client release follows pending reconfiguration in the

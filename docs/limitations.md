@@ -62,6 +62,12 @@ The [native-target replacement tests](https://github.com/prefanatic/quick_blue/b
 also distinguish lifetime identity from native endpoint identity, including an
 obsolete endpoint that throws during stop. These are fake ownership assertions,
 not hardware proof or a guarantee that a failed native stop eventually succeeds.
+`quick_blue_linux/test/notification_native_proxy_test.dart` uses real BlueZ
+wrappers and objects with a fake D-Bus method boundary. Fresh wrappers and object
+recreation at the same path must retain a live claim after successful setup.
+Retirement is followed by current-target confirmation; pending/error controls
+check disconnect ordering and release. This is not an uninterrupted handoff or
+evidence of real bus ownership, hardware cleanup or notification delivery.
 
 
 ## Verification gaps

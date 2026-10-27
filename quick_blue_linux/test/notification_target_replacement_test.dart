@@ -115,7 +115,7 @@ class Target extends notify.HeldCharacteristic {
   @override
   Future<void> startNotify() async {
     starts++;
-    if (holdSetup) {
+    if (holdSetup && !setupEntered.isCompleted) {
       setupEntered.complete();
       await reply.future;
       if (failSetup) throw StateError('replacement setup failed');

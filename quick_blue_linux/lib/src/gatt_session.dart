@@ -213,15 +213,39 @@ class LinuxGattSession {
     claim.characteristics.add(targetCharacteristic);
     claims[key] = claim;
 
-    // A UUID can resolve to a different native endpoint after rediscovery.
-    // Keep the lifetime identity (queued release owns it), but retire acquired
-    // obsolete endpoints without losing the newly acquired target on failure.
+    // BlueZ does not expose a characteristic's D-Bus path here. Fresh wrappers
+    // can address either the same endpoint (even after object recreation) or a
+    // different one. Retirement may therefore stop the just-enabled claim.
+    // Confirm acquisition AFTER all retirement attempts, including failed stops
+    // whose native side effects are unknown. Do not retire before initial setup:
+    // a rejected replacement must leave the preceding acquisition available.
+    final retiredTargets = claim.characteristics.any(
+      (target) => !identical(target, targetCharacteristic),
+    );
     await _releaseNotificationClaim(
       deviceId,
       key,
       claim,
       except: targetCharacteristic,
     );
+    if (retiredTargets) {
+      try {
+        await _runBlueZGattOperation(
+          operation: 'setNotifiable',
+          deviceId: deviceId,
+          serviceId: service,
+          characteristicId: characteristic,
+          action: targetCharacteristic.startNotify,
+        );
+      } on BlueZAlreadyExistsException {
+        // A different endpoint was retired; the current claim is still live.
+      } on Object {
+        if (cancellation.isCompleted) {
+          await _releaseNotificationClaim(deviceId, key, claim);
+        }
+        rethrow;
+      }
+    }
 
     if (cancellation.isCompleted) {
       await _releaseNotificationClaim(deviceId, key, claim);

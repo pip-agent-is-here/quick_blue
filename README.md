@@ -24,7 +24,8 @@ Linux supports explicit adapter addresses and client shutdown; see
 Use opt-in [snapshot-bound handles](docs/gatt.md#snapshot-bound-submissions) to reject
 new IO after GATT invalidation, including security-recovery retries. Linux retains
 native notification ownership across watch replacement, tracks acquired native
-endpoints after same-UUID rediscovery, and retries failed scan
+endpoints after same-UUID rediscovery, confirms setup after retiring potentially
+aliasing BlueZ wrappers, and retries failed scan
 stops against the original adapter. The [headless operator CLI](quick_blue_linux/example/README.md)
 provides adapter/device selection and opt-in pairing, reads, writes and notifications.
 [ARM64 cross-build and emulator checks](docs/testing.md#arm64-build-and-controlled-runtime)

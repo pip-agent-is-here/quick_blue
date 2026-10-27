@@ -12,6 +12,10 @@
 
 ### Headless Linux
 
+- Confirm current notification acquisition after retirement of older BlueZ
+  wrappers, which may alias the same native endpoint even after object recreation.
+  Do not report successful setup with a claim disabled by its own retirement;
+  serialize held/failed confirmation with queued client disconnect.
 - Track actual acquired notification endpoints across same-UUID rediscovery.
   Retire obsolete targets without losing the current claim on cleanup failure;
   queued disconnect releases preceding replacement setup while preserving peers.
