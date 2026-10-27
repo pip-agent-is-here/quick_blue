@@ -10,8 +10,16 @@ import 'notification_disconnect_test.dart' as notify;
 
 void main() {
   for (final mode in ['same-target', 'replacement', 'obsolete-target']) {
-    for (final order in ['settled', 'pending', 'setup-error']) {
-      if (mode == 'same-target' && order == 'setup-error') continue;
+    for (final order in [
+      'settled',
+      'pending',
+      'setup-error',
+      'confirmation-error',
+    ]) {
+      if (mode == 'same-target' &&
+          (order == 'setup-error' || order == 'confirmation-error')) {
+        continue;
+      }
       test('disconnect releases native target: $mode $order', () async {
         final adapter = fake.Adapter('02:00:00:00:00:01');
         final old = Target();
@@ -63,16 +71,33 @@ void main() {
         await a.discoverServices(device.address);
         current.holdSetup = true;
         current.failSetup = order == 'setup-error';
+        current.failConfirmation = order == 'confirmation-error';
         final setup = enable().then<Object?>(
           (_) => null,
           onError: (Object error) => error,
         );
         await current.setupEntered.future;
-        if (order == 'settled') {
+        if (order == 'settled' || order == 'confirmation-error') {
           current.reply.complete();
-          expect(await setup, isNull);
+          expect(
+            await setup,
+            order == 'confirmation-error' ? isA<StateError>() : isNull,
+          );
+          if (order == 'confirmation-error') {
+            expect(
+              current.clientClaim,
+              isFalse,
+              reason: 'failed setup must release even without disconnect',
+            );
+          }
           if (!identical(old, current)) {
-            expect(old.stops, 1, reason: 'retire the obsolete acquisition');
+            expect(
+              old.stops,
+              mode == 'obsolete-target' && order == 'confirmation-error'
+                  ? 2
+                  : 1,
+              reason: 'retire the obsolete acquisition',
+            );
           }
         }
         var disconnected = false;
@@ -80,12 +105,17 @@ void main() {
           disconnected = true;
         });
         await pumpEventQueue();
-        if (order != 'settled') {
+        if (order != 'settled' && order != 'confirmation-error') {
           expect(disconnected, isFalse);
           current.reply.complete();
         }
         final error = await setup;
-        expect(error, order == 'setup-error' ? isA<StateError>() : isNull);
+        expect(
+          error,
+          order == 'setup-error' || order == 'confirmation-error'
+              ? isA<StateError>()
+              : isNull,
+        );
         await disconnect;
         expect(disconnected, isTrue);
         expect(device.connected, isTrue);
@@ -109,12 +139,16 @@ class Target extends notify.HeldCharacteristic {
   var clientClaim = false;
   var removed = false;
   var failSetup = false;
+  var failConfirmation = false;
   bool holdSetup = false;
   final peerClaim = true;
 
   @override
   Future<void> startNotify() async {
     starts++;
+    if (failConfirmation && starts == 2) {
+      throw StateError('confirmation failed after initial acquisition');
+    }
     if (holdSetup && !setupEntered.isCompleted) {
       setupEntered.complete();
       await reply.future;

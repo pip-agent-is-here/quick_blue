@@ -240,9 +240,9 @@ class LinuxGattSession {
       } on BlueZAlreadyExistsException {
         // A different endpoint was retired; the current claim is still live.
       } on Object {
-        if (cancellation.isCompleted) {
-          await _releaseNotificationClaim(deviceId, key, claim);
-        }
+        // Initial setup acquired a claim, but the caller will observe failure
+        // and may never request teardown (for example a failed stream setup).
+        await _releaseNotificationClaim(deviceId, key, claim);
         rethrow;
       }
     }

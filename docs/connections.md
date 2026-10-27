@@ -175,7 +175,8 @@ attempts to stop obsolete targets. Obsolete-target errors are logged and retaine
 for retry. Because different wrappers may alias the same native endpoint, setup
 confirms the current claim after retirement before returning success; queued
 disconnect waits for this confirmation, including its error path. Confirmation
-can fail and is not an atomic or uninterrupted native handoff. Failed stops remain
+can fail, attempting acquired-claim release before propagating the error, and is
+not an atomic or uninterrupted native handoff. Failed stops remain
 for retry, but do not block release of the current target. Independent clients
 keep their native notification ownership and connection. See the controlled
 [teardown cases](limitations.md#linux-gatt-teardown-characterization).

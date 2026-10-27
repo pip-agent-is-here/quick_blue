@@ -409,7 +409,8 @@ orders; it asserts native claim release while a peer's claim and connection rema
 `test/notification_target_replacement_test.dart` replaces a characteristic with
 the same UUID after cache invalidation. Settled/held setup, setup failure and
 obsolete-target stop errors check actual current/old native ownership and public
-disconnect completion while a peer retains the connection; same-target controls
+disconnect completion while a peer retains the connection. Confirmation failure
+also releases acquired ownership before any disconnect request; same-target controls
 retain stable ownership through local watch replacement.
 `test/notification_native_proxy_test.dart` uses real BlueZ characteristic/object
 wrappers over a controlled D-Bus method boundary: same wrapper, fresh wrappers

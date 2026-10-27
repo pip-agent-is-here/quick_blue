@@ -16,6 +16,7 @@
   wrappers, which may alias the same native endpoint even after object recreation.
   Do not report successful setup with a claim disabled by its own retirement;
   serialize held/failed confirmation with queued client disconnect.
+  Failed confirmation attempts claim release even without a later disconnect.
 - Track actual acquired notification endpoints across same-UUID rediscovery.
   Retire obsolete targets without losing the current claim on cleanup failure;
   queued disconnect releases preceding replacement setup while preserving peers.
