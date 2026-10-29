@@ -1,5 +1,12 @@
 ## Unreleased
 
+- Add a federated Web Bluetooth backend with a direct-gesture `requestDevice`
+  chooser, authorized GATT discovery/read/write/notifications, bounded waits and
+  stale-session fencing. Native scanning, bonding, MTU and L2CAP remain unsupported
+  in browsers. Add Chrome interop contracts and a read-only-by-default browser
+  hardware loop with explicit stage outcomes and JSON export; builds and simulator
+  tests do not constitute real-radio verification.
+
 - Restore workspace dependency resolution on the declared Flutter 3.44.2 /
   Dart 3.12.2 minimum by pinning development-only ffigen to 21.0.0.
 
