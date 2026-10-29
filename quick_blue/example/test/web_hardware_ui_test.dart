@@ -13,6 +13,60 @@ import 'package:quick_blue_example/web_bluetooth_hardware.dart';
 external JSAny? evaluate(JSString source);
 
 void main() {
+  for (final standalone in [false, true]) {
+    testWidgets(
+      'explicit name-only selection preserves optional services ($standalone)',
+      (tester) async {
+        evaluate(
+          '''globalThis.pickerOptions = null;
+        Object.defineProperty(navigator, 'bluetooth', {configurable:true,
+        value:{requestDevice:(options) => {globalThis.pickerOptions = options;
+          return Promise.reject(new DOMException('fixture', 'NotAllowedError'));}}});'''
+              .toJS,
+        );
+        QuickBluePlatform.instance = QuickBlueWeb();
+        await tester.pumpWidget(const MaterialApp(home: HardwarePage()));
+        final controller = tester
+            .widget<TextField>(find.byType(TextField))
+            .controller!;
+        final p = jsonDecode(controller.text) as Map<String, dynamic>;
+        for (final key in ['adapter', 'peripheral', 'firmware']) {
+          p[key] = 'fixture';
+        }
+        p['namePrefix'] = 'LEDnetWF0200A36292D3';
+        p['filterServices'] = <String>[];
+        p['optionalServices'] = ['fe00', 'ffff'];
+        p['readCharacteristic'] = '';
+        controller.text = jsonEncode(p);
+        final button = find.text(
+          standalone
+              ? 'Open chooser — press Cancel'
+              : 'Select device and run loops',
+        );
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pumpAndSettle();
+        final options =
+            jsonDecode(
+                  (evaluate('JSON.stringify(globalThis.pickerOptions)'.toJS)
+                          as JSString)
+                      .toDart,
+                )
+                as Map<String, dynamic>;
+        expect((options['filters'] as List).single, {
+          'namePrefix': 'LEDnetWF0200A36292D3',
+        });
+        expect(options['optionalServices'], [
+          '0000fe00-0000-1000-8000-00805f9b34fb',
+          '0000ffff-0000-1000-8000-00805f9b34fb',
+        ]);
+      },
+    );
+  }
+
   Map<String, dynamic> report(WidgetTester tester) =>
       jsonDecode(
             tester.widget<SelectableText>(find.byType(SelectableText)).data!,

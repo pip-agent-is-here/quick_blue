@@ -140,6 +140,17 @@ hardware results.
 2. Set a repeat count from 1 through 10. Choose your notification characteristic
    and exact expected payload. Arrange a safe physical peripheral action to emit
    that payload during each of the two listen cycles per connection.
+   Chooser selection is independent of the GATT `service`: `filterServices`
+   defaults to `[service]` when omitted (backwards compatible), `namePrefix`
+   optionally narrows the same filter, and `optionalServices` grants access to
+   services that need not be advertised. For a documented name-only target set
+   `filterServices: []`, its known `namePrefix`, and include the target GATT
+   service in `optionalServices`. Do not also filter on a service the target does
+   not advertise: the browser ANDs those conditions. Empty services and no name
+   are rejected rather than opening an unrestricted chooser. The same selection
+   configuration applies to the cancel check. Leave `readCharacteristic` empty
+   if no safe read is documented: discovery/reconnect still run, but the read
+   stage and full aggregate remain BLOCKED; no guessed read is attempted.
 3. Keep writes disabled unless your documented peripheral protocol has known-safe
    bytes. To test writes, fill `writeCharacteristic` and `safeWrite`, then
    explicitly check the authorization checkbox. A write PASS means acknowledged

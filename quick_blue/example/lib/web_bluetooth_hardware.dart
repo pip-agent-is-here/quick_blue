@@ -25,6 +25,9 @@ class _HardwarePageState extends State<HardwarePage> {
       'peripheral': '',
       'firmware': '',
       'service': '180f',
+      'namePrefix': '',
+      'filterServices': ['180f'],
+      'optionalServices': <String>[],
       'readCharacteristic': '2a19',
       'expectedRead': [42],
       'notifyCharacteristic': '',
@@ -138,7 +141,6 @@ class _HardwarePageState extends State<HardwarePage> {
       'peripheral',
       'firmware',
       'service',
-      'readCharacteristic',
     ]) {
       require((p[key] as String).isNotEmpty, 'Provide $key before selection');
     }
@@ -146,8 +148,27 @@ class _HardwarePageState extends State<HardwarePage> {
     payload(p, 'expectedRead');
     payload(p, 'expectedNotification');
     payload(p, 'safeWrite');
+    final filters =
+        (p['filterServices'] as List?)?.cast<String>() ??
+        [p['service'] as String];
+    require(
+      filters.isNotEmpty || (p['namePrefix'] as String? ?? '').isNotEmpty,
+      'Provide filterServices or namePrefix; unrestricted selection is disabled',
+    );
     return p;
   }
+
+  Future<BluetoothDevice> pick(Map<String, dynamic> p) =>
+      QuickBlue.requestDevice(
+        serviceUuids:
+            (p['filterServices'] as List?)?.cast<String>() ??
+            [p['service'] as String],
+        namePrefix: (p['namePrefix'] as String? ?? '').isEmpty
+            ? null
+            : p['namePrefix'] as String,
+        optionalServices:
+            (p['optionalServices'] as List?)?.cast<String>() ?? [],
+      );
 
   Future<void> run() async {
     if (busy) return;
@@ -177,9 +198,7 @@ class _HardwarePageState extends State<HardwarePage> {
       record('permission cancel', 'BLOCKED', 'Run separate cancel check.');
       record('peripheral loss/recovery', 'BLOCKED', 'Run separate loss check.');
       // Must be the first asynchronous API: no awaited availability preflight.
-      final picker = QuickBlue.requestDevice(
-        serviceUuids: [p['service'] as String],
-      );
+      final picker = pick(p);
       device = await stage('selection', () => picker);
       selected = device;
       for (var cycle = 1; cycle <= (p['repeat'] as int); cycle++) {
@@ -190,17 +209,25 @@ class _HardwarePageState extends State<HardwarePage> {
             '$cycle discovery',
             () => d.discoverGatt(timeout: deadline),
           );
-          final read = gatt.characteristic(
-            p['readCharacteristic'] as String,
-            service: p['service'] as String,
-          );
-          await stage('$cycle read assertion', () async {
-            final value = await read.read();
-            require(
-              same(value, payload(p, 'expectedRead')),
-              'Unexpected read bytes: $value',
+          if ((p['readCharacteristic'] as String? ?? '').isEmpty) {
+            record(
+              '$cycle read assertion',
+              'BLOCKED',
+              'No documented safe read characteristic/payload configured.',
             );
-          });
+          } else {
+            final read = gatt.characteristic(
+              p['readCharacteristic'] as String,
+              service: p['service'] as String,
+            );
+            await stage('$cycle read assertion', () async {
+              final value = await read.read();
+              require(
+                same(value, payload(p, 'expectedRead')),
+                'Unexpected read bytes: $value',
+              );
+            });
+          }
           if (allowWrite) {
             await stage('$cycle safe write', () async {
               require(
@@ -313,9 +340,7 @@ class _HardwarePageState extends State<HardwarePage> {
     setState(() => busy = true);
     try {
       final p = prepareStandalone();
-      final picker = QuickBlue.requestDevice(
-        serviceUuids: [p['service'] as String],
-      );
+      final picker = pick(p);
       try {
         await picker.timeout(deadline);
         record(
