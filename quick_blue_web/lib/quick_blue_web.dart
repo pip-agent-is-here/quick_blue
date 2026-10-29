@@ -145,10 +145,15 @@ class QuickBlueWeb extends QuickBluePlatform {
     } on QuickBlueException {
       rethrow;
     } catch (error) {
-      throw _error(
-        operation,
-        'Browser rejected $operation: $error. Check permission, user gesture, service authorization and peripheral state.',
-        QuickBlueErrorCode.operationFailed,
+      throw QuickBlueException(
+        operation: operation,
+        message:
+            'Browser rejected $operation: $error. Check permission, user gesture, service authorization and peripheral state.',
+        code: QuickBlueErrorCode.operationFailed,
+        details:
+            operation == 'requestDevice' && error is browser.DeviceNotFoundError
+            ? const {'chooserNotFound': true}
+            : null,
       );
     } finally {
       session?.waiters.remove(cancel);

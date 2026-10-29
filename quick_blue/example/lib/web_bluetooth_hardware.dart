@@ -43,6 +43,41 @@ class _HardwarePageState extends State<HardwarePage> {
   static const deadline = Duration(seconds: 25);
   static const sourceSha = String.fromEnvironment('QUICK_BLUE_SOURCE_SHA');
 
+  void initializeStages(Map<String, dynamic> p) {
+    started ??= DateTime.now().toUtc();
+    selectedProfile = p;
+    for (final name in [
+      'selection',
+      'permission cancel',
+      'peripheral loss/recovery',
+      for (var cycle = 1; cycle <= (p['repeat'] as int); cycle++)
+        for (final step in [
+          'connect',
+          'discovery',
+          'read assertion',
+          'safe write',
+          'notification',
+          'disconnect cleanup',
+        ])
+          '$cycle $step',
+    ]) {
+      if (!stages.any((s) => s['stage'] == name)) {
+        record(name, 'BLOCKED', 'Not executed.');
+      }
+    }
+  }
+
+  Map<String, dynamic> prepareStandalone() {
+    started ??= DateTime.now().toUtc();
+    final p = parse();
+    require(
+      selectedProfile == null || jsonEncode(selectedProfile) == jsonEncode(p),
+      'Profile changed: start a new full run before standalone checks.',
+    );
+    initializeStages(p);
+    return p;
+  }
+
   void record(String name, String result, [Object? detail]) {
     setState(() {
       stages.removeWhere((s) => s['stage'] == name && s['result'] == 'BLOCKED');
@@ -126,7 +161,7 @@ class _HardwarePageState extends State<HardwarePage> {
     BluetoothDevice? device;
     try {
       final p = parse();
-      selectedProfile = p;
+      initializeStages(p);
       for (var cycle = 1; cycle <= (p['repeat'] as int); cycle++) {
         for (final name in [
           'connect',
@@ -233,6 +268,7 @@ class _HardwarePageState extends State<HardwarePage> {
                 });
               }
             }
+            record('$cycle notification', 'PASS');
           }
         } finally {
           await stage(
@@ -273,9 +309,10 @@ class _HardwarePageState extends State<HardwarePage> {
   }
 
   Future<void> cancelCheck() async {
+    if (busy) return;
     setState(() => busy = true);
     try {
-      final p = parse();
+      final p = prepareStandalone();
       final picker = QuickBlue.requestDevice(
         serviceUuids: [p['service'] as String],
       );
@@ -288,8 +325,15 @@ class _HardwarePageState extends State<HardwarePage> {
         );
       } catch (error) {
         // Browser NotFoundError conflates cancellation and no matching devices.
+        if (error is! QuickBlueException ||
+            error.details is! Map ||
+            (error.details as Map)['chooserNotFound'] != true) {
+          record('permission cancel', 'BLOCKED', error);
+          return;
+        }
         if (!mounted) return;
-        final confirmed = await showDialog<bool>(
+        final navigator = Navigator.of(context, rootNavigator: true);
+        final route = DialogRoute<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Confirm observed cancellation'),
@@ -308,6 +352,18 @@ class _HardwarePageState extends State<HardwarePage> {
             ],
           ),
         );
+        bool? confirmed;
+        try {
+          confirmed = await navigator.push(route).timeout(deadline);
+        } on TimeoutException {
+          if (route.isActive) navigator.removeRoute(route);
+          record(
+            'permission cancel',
+            'BLOCKED',
+            'Operator confirmation timed out.',
+          );
+          return;
+        }
         record(
           'permission cancel',
           confirmed == true ? 'PASS' : 'BLOCKED',
@@ -322,6 +378,13 @@ class _HardwarePageState extends State<HardwarePage> {
   }
 
   Future<void> lossCheck() async {
+    if (busy) return;
+    try {
+      prepareStandalone();
+    } catch (error) {
+      record('peripheral loss/recovery', 'BLOCKED', error);
+      return;
+    }
     final d = selected;
     if (d == null) {
       record(
@@ -390,7 +453,13 @@ class _HardwarePageState extends State<HardwarePage> {
     'secureContext': web.window.isSecureContext,
     'profile': selectedProfile,
     'selectedDeviceId': selected?.deviceId,
-    'aggregate': stages.isEmpty || stages.any((s) => s['result'] == 'BLOCKED')
+    'aggregate':
+        started == null ||
+            selectedProfile == null ||
+            selected == null ||
+            sourceSha.isEmpty ||
+            stages.isEmpty ||
+            stages.any((s) => s['result'] == 'BLOCKED')
         ? (stages.any((s) => s['result'] == 'FAIL') ? 'FAIL' : 'BLOCKED')
         : (stages.any((s) => s['result'] == 'FAIL') ? 'FAIL' : 'PASS'),
     'stages': stages,

@@ -151,7 +151,9 @@ hardware results.
    stages have a 25-second UI deadline in addition to backend bounds. A missing
    notification/write profile is BLOCKED, never a skipped PASS.
 5. Run the separate cancel check, explicitly cancel the visible chooser and
-   truthfully confirm that action. A rejection alone is not cancellation proof.
+   truthfully confirm that action within 25 seconds. Only a browser not-found
+   rejection is eligible for this confirmation; denial, unavailable API and
+   timeout remain BLOCKED. A rejection alone is not cancellation proof.
 6. Run Manual loss / recovery. Once connected, power the known peripheral OFF
    within 60 seconds. After the remote disconnect stage passes, power it ON
    within 60 seconds for reconnect and rediscovery. Cleanup is attempted on
@@ -160,6 +162,11 @@ hardware results.
    device/profile and per-stage PASS/FAIL/BLOCKED plus an aggregate. Record exact
    adapter details in the profile (browsers do not reveal adapter identity).
    A failure dominates the aggregate; otherwise any blocked stage prevents PASS.
+   Standalone cancel/loss entry points initialize provenance and the full required
+   stage list too: cancel-only or out-of-order checks cannot pass the hardware
+   suite. Missing metadata or an unselected device also prevents aggregate PASS.
+   Start a new full run after changing the profile; standalone checks cannot mix
+   results from different profiles.
    Preserve raw exports as test/CI artifacts, not tracked hardware dossiers.
 
 Absent hardware, missing profile details or unavailable browser capabilities are

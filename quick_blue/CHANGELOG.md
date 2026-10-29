@@ -6,6 +6,8 @@
   in browsers. Add Chrome interop contracts and a read-only-by-default browser
   hardware loop with explicit stage outcomes and JSON export; builds and simulator
   tests do not constitute real-radio verification.
+  Standalone hardware checks retain full-suite blocked stages and provenance;
+  cancellation confirmation is bounded and excludes denial/API/timeout errors.
 
 - Restore workspace dependency resolution on the declared Flutter 3.44.2 /
   Dart 3.12.2 minimum by pinning development-only ffigen to 21.0.0.

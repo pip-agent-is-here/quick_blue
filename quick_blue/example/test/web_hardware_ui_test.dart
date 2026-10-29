@@ -13,6 +13,100 @@ import 'package:quick_blue_example/web_bluetooth_hardware.dart';
 external JSAny? evaluate(JSString source);
 
 void main() {
+  Map<String, dynamic> report(WidgetTester tester) =>
+      jsonDecode(
+            tester.widget<SelectableText>(find.byType(SelectableText)).data!,
+          )
+          as Map<String, dynamic>;
+
+  Future<void> open(WidgetTester tester, String error) async {
+    evaluate(
+      '''Object.defineProperty(navigator, 'bluetooth', {configurable:true,
+      value: {requestDevice: () => ${error == 'pending' ? 'new Promise(() => {})' : "Promise.reject(new DOMException('fixture', '$error'))"}}});'''
+          .toJS,
+    );
+    if (error == 'unavailable') evaluate('delete navigator.bluetooth'.toJS);
+    QuickBluePlatform.instance = QuickBlueWeb(
+      operationTimeout: const Duration(milliseconds: 20),
+    );
+    await tester.pumpWidget(const MaterialApp(home: HardwarePage()));
+    final controller = tester
+        .widget<TextField>(find.byType(TextField))
+        .controller!;
+    final p = jsonDecode(controller.text) as Map<String, dynamic>;
+    for (final key in ['adapter', 'peripheral', 'firmware']) {
+      p[key] = 'fixture';
+    }
+    controller.text = jsonEncode(p);
+    final button = find.text('Open chooser — press Cancel');
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+  }
+
+  testWidgets('cancel-first cannot pass full suite and has provenance', (
+    tester,
+  ) async {
+    await open(tester, 'NotFoundError');
+    expect(find.text('Yes, I pressed Cancel'), findsOneWidget);
+    await tester.tap(find.text('Yes, I pressed Cancel'));
+    await tester.pumpAndSettle();
+    final result = report(tester);
+    expect(result['aggregate'], 'BLOCKED');
+    expect(result['started'], isNotNull);
+    expect(result['profile'], isNotNull);
+    final stages = result['stages'] as List;
+    expect(
+      stages.any(
+        (dynamic s) => s['stage'] == '1 connect' && s['result'] == 'BLOCKED',
+      ),
+      true,
+    );
+  });
+
+  testWidgets('confirmation times out and releases UI', (tester) async {
+    await open(tester, 'NotFoundError');
+    await tester.pump(const Duration(seconds: 26));
+    await tester.pumpAndSettle();
+    expect(find.text('Yes, I pressed Cancel'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(report(tester)['aggregate'], 'BLOCKED');
+  });
+
+  testWidgets('denial is not eligible for cancellation confirmation', (
+    tester,
+  ) async {
+    await open(tester, 'NotAllowedError');
+    await tester.pumpAndSettle();
+    expect(find.text('Yes, I pressed Cancel'), findsNothing);
+    expect(report(tester)['aggregate'], 'BLOCKED');
+  });
+
+  testWidgets('loss-first and missing metadata remain BLOCKED', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HardwarePage()));
+    final button = find.text('Manual loss / recovery check');
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(report(tester)['aggregate'], 'BLOCKED');
+    expect(report(tester)['started'], isNotNull);
+    expect(report(tester)['profile'], isNull);
+  });
+
+  for (final outcome in ['pending', 'unavailable']) {
+    testWidgets('$outcome cannot be confirmed as cancellation', (tester) async {
+      await open(tester, outcome);
+      await tester.pump(const Duration(seconds: 26));
+      await tester.pumpAndSettle();
+      expect(find.text('Yes, I pressed Cancel'), findsNothing);
+      expect(report(tester)['aggregate'], 'BLOCKED');
+    });
+  }
+
   testWidgets(
     'missing hardware profile is BLOCKED and read-only is the default',
     (tester) async {
