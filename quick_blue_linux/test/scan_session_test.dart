@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bluez/bluez.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:quick_blue_linux/quick_blue_linux.dart';
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 
@@ -237,6 +237,106 @@ void main() {
     expect(results, hasLength(2));
   });
 
+  test('failed stop retries the exact removed adapter until success', () async {
+    await platform.startScan();
+    adapter.stopError = StateError('first stop failed');
+    await expectLater(platform.stopScan(), throwsStateError);
+    client.adapters.clear();
+    adapter.stopError = null;
+    await platform.stopScan();
+    expect(adapter.calls.where((c) => c == 'stop'), hasLength(2));
+    await platform.stopScan();
+    expect(adapter.calls.where((c) => c == 'stop'), hasLength(2));
+  });
+
+  for (final replaceAdapter in [false, true]) {
+    for (final failStop in [false, true]) {
+      test(
+        'queued scan waits for old stop ($replaceAdapter, $failStop)',
+        () async {
+          await platform.startScan();
+          await listen();
+          final gate = Completer<void>();
+          adapter.stopGate = gate;
+          if (failStop) adapter.stopError = StateError('held stop failed');
+          final stopped = platform.stopScan().then<Object?>(
+            (_) => null,
+            onError: (Object e) => e,
+          );
+          await pumpEventQueue();
+          expect(adapter.calls.last, 'stop');
+          final replacement = replaceAdapter ? _Adapter() : adapter;
+          client.adapters
+            ..clear()
+            ..add(replacement);
+          final restarted = platform.startScan(
+            scanFilter: ScanFilter(rssi: -70),
+          );
+          await pumpEventQueue();
+          final startsBeforeReply = adapter.calls
+              .where((c) => c == 'start')
+              .length;
+          final replacementCallsBeforeReply = List<String>.of(
+            replacement.calls,
+          );
+          adapter.stopGate = null;
+          adapter.stopError = null;
+          gate.complete();
+          expect(await stopped, failStop ? isA<StateError>() : isNull);
+          await restarted;
+          expect(startsBeforeReply, 1);
+          if (replaceAdapter) expect(replacementCallsBeforeReply, isEmpty);
+          expect(
+            adapter.calls.where((c) => c == 'stop'),
+            hasLength(failStop ? 2 : 1),
+          );
+          expect(replacement.filter['rssi'], -70);
+          client.added.add(device);
+          await pumpEventQueue();
+          expect(device.properties.hasListener, isTrue);
+          expect(results.last.rssi, -60);
+          final before = replacement.calls.where((c) => c == 'stop').length;
+          await platform.stopScan();
+          expect(
+            replacement.calls.where((c) => c == 'stop'),
+            hasLength(before + 1),
+          );
+        },
+      );
+    }
+  }
+
+  test('stop queued during native start releases the completed scan', () async {
+    final gate = Completer<void>();
+    adapter.startGate = gate;
+    final start = platform.startScan();
+    await pumpEventQueue();
+    final stop = platform.stopScan();
+    await pumpEventQueue();
+    expect(adapter.calls, ['filter', 'start']);
+    gate.complete();
+    await Future.wait([start, stop]);
+    expect(adapter.calls, ['filter', 'start', 'stop']);
+    await platform.stopScan();
+    expect(adapter.calls.where((c) => c == 'stop'), hasLength(1));
+  });
+
+  test(
+    'concurrent stops release once after successful native completion',
+    () async {
+      await platform.startScan();
+      final gate = Completer<void>();
+      adapter.stopGate = gate;
+      final first = platform.stopScan();
+      final second = platform.stopScan();
+      await pumpEventQueue();
+      expect(adapter.calls.where((c) => c == 'stop'), hasLength(1));
+      gate.complete();
+      await Future.wait([first, second]);
+      expect(adapter.calls.where((c) => c == 'stop'), hasLength(1));
+    },
+  );
+
   test('stop failure cancels watches and next scan resets filters', () async {
     await platform.startScan(scanFilter: ScanFilter(rssi: -40));
     await listen();
@@ -330,6 +430,8 @@ class _Adapter implements BlueZAdapter {
   Map<String, Object?> filter = {};
   Object? stopError;
   Object? startError;
+  Completer<void>? stopGate;
+  Completer<void>? startGate;
   @override
   Future<void> setDiscoveryFilter({
     List<String>? uuids,
@@ -355,13 +457,16 @@ class _Adapter implements BlueZAdapter {
   @override
   Future<void> startDiscovery() async {
     calls.add('start');
+    await startGate?.future;
     if (startError != null) throw startError!;
   }
 
   @override
   Future<void> stopDiscovery() async {
     calls.add('stop');
-    if (stopError != null) throw stopError!;
+    final error = stopError;
+    await stopGate?.future;
+    if (error != null) throw error;
   }
 
   @override

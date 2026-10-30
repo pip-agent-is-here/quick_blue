@@ -1,7 +1,7 @@
 ---
 type: "Reference"
 title: "Discover, write and subscribe"
-description: "Use valid GATT snapshots, explicit write framing and subscription-owned notifications."
+description: "Use opt-in snapshot-bound submissions, explicit write framing and subscription-owned notifications."
 tags: ["gatt", "notifications", "writes"]
 
 sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_gatt.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_characteristic.dart"}, {"id": "source3", "resource": "../quick_blue_platform_interface/test/bluetooth_gatt_test.dart"}, {"id": "routing", "resource": "../quick_blue_platform_interface/lib/src/characteristic_lifecycle.dart"}, {"id": "retained", "resource": "../quick_blue_platform_interface/test/retained_characteristic_value_stream_test.dart"}, {"id": "settlement", "resource": "../quick_blue_platform_interface/test/bluetooth_notifications_test.dart"}]
@@ -25,6 +25,41 @@ Omit `service` only when the UUID identifies one characteristic across the snaps
 Missing or duplicate UUIDs produce `notFound` or `ambiguous`, not an arbitrary pick.
 `hasCharacteristic(uuid, service: ...)` is available for presence checks.
 
+## Snapshot-bound submissions
+
+The [headless CLI](quickstart.md#headless-linux-operator-workflow) resolves the operator's
+characteristic under the selected service with `boundCharacteristic`. Discovery
+alone performs no attribute read/write. `--read`, `--write-hex` and
+`--notify-seconds` are separate opt-ins. The CLI awaits acknowledged writes
+without inventing framing or safe payloads. Notification errors propagate and
+the subscription is canceled before disconnect; merely waiting an interval
+does not assert that any value arrived. Protected IO failures do not silently
+pair in this example (see [pairing](pairing.md#headless-linux-agent-lifecycle)).
+
+`gatt.boundCharacteristic(characteristicId, service: serviceId)` is opt-in.
+After a reported service-database change, new reads, writes and explicit
+notification changes fail with `invalidState` before platform submission.
+`notifications()` checks at listen time, including a retained stream. Rediscover
+and resolve a fresh bound handle. Every native submission rechecks validity,
+including retries after coordinated security recovery and notification setup
+waiting behind earlier lifecycle work. Invalidation during recovery prevents the
+retry with `invalidState`; it does not undo the first rejected request or disable
+security recovery for valid or direct-ID handles. Chunked writes check each chunk; already
+submitted IO is not rolled back. Raw `valueStream` routing and active notification
+subscriptions are not automatically ended by this guard.
+
+Existing `gatt.characteristic()` and device direct-ID APIs remain unbound:
+resolving an invalid snapshot is rejected, but a previously resolved ID-only
+handle does not gain the new guard. Disconnect/reconnect alone retains the
+existing snapshot generation policy; it is not an invalidation event. Pure-Dart
+tests and Linux fake-client call counters check these guards; they do not test
+remote device behavior.[^source1][^source2]
+
+The [held-recovery regressions](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_platform_interface/test/snapshot_security_retry_test.dart)
+cover invalidation during read, write, explicit notification change and stream
+setup recovery, plus direct-ID and still-valid bound controls. These check platform
+submission counts and terminal stream errors, not native security negotiation.
+
 ## Notifications own their teardown
 
 ```dart
@@ -37,8 +72,22 @@ await notifications.cancel();
 ```
 
 Concurrent listeners share native setup; the final listener requests its release.
-Linux has reproduced [fake-BlueZ teardown gaps](limitations.md#linux-gatt-teardown-characterization);
-do not interpret cancellation as proof of native cleanup. Use
+Linux tracks native claims independently of replaceable property watches and
+discovery caches. Same-UUID rediscovery can resolve a different native endpoint:
+successful setup records that acquisition and attempts to retire obsolete targets.
+Different BlueZ wrappers can also address the same native endpoint. After any
+retirement attempt, setup confirms the current acquisition with `StartNotify`
+(accepting `AlreadyExists`) before reporting success, so retirement cannot undo
+its own successful setup. Confirmation failure propagates after attempting to
+release acquired claims; failed releases remain recorded for retry. This may
+briefly interrupt this client's notifications during rediscovery; it is not an
+atomic native handoff.
+An obsolete target's stop failure is logged without preventing current-target
+release; failed releases remain recorded for a later attempt.
+Queued client release follows pending reconfiguration in the
+same lifetime, but cannot stop a newer generation's claim. The
+[fake-BlueZ regressions](limitations.md#linux-gatt-teardown-characterization)
+are not proof of hardware cleanup or notification delivery. Use
 `valueStream` plus `setNotifiable(...)` only when setup/teardown must be managed
 separately (listen before enabling).
 
@@ -156,6 +205,8 @@ refresh work, await it, and surface failures instead of discarding an async
 listener future. See [capabilities](capabilities.md) for OS gates.
 
 [^source3]: GATT discovery, invalidation and chunked-write tests.
+[^source1]: GATT resolvers, including the opt-in snapshot-bound handle.
+[^source2]: Submission guards for reads, writes and notifications.
 [^routing]: Raw value controller registration, identity-safe cancellation and event dispatch.
 [^retained]: Injected-event regressions for retained streams and overlapping listeners; no native notification calls.
 [^settlement]: Controlled-future notification setup, cancellation, retry, shared ownership and conflicting-mode regressions; Dart lifecycle evidence only.

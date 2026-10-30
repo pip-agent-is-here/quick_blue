@@ -24,31 +24,69 @@ sources: [{"id": "source1", "resource": "../quick_blue_linux/lib/quick_blue_linu
 
 ## Linux GATT teardown characterization
 
-Linux teardown does not reliably stop pending discovery or notification setup.
-The `characterization:` tests in
+Linux teardown cancels pending discovery and retires late notification setup.
+The regression tests in
 [`gatt_session_test.dart`](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/gatt_session_test.dart)
-reproduce these unresolved lifetime gaps with fake BlueZ objects:
+check lifetime behavior with fake BlueZ objects:
 
 | Controlled ordering | Observed fake-BlueZ result |
 | --- | --- |
-| Pending `ServicesResolved`, then clear, replacement discovery, then old resolution | Old waiter survives clear; replacement completes first, then old resolution emits a second discovery and completion. |
-| `StartNotify` suspended until client release and clear finish | Teardown makes zero `StopNotify` calls; resumed setup installs a watch and emits initial `[0]` and later `[6]`. Later client release also makes zero calls with its cache cleared. |
-| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Listener survives invalidation; release and clear make zero `StopNotify` calls and the fake stays notifying. Cache-intact control makes exactly one call and stops notifying. |
+| Pending `ServicesResolved`, then clear, replacement discovery, then old resolution | Old discovery fails with `cancelled`; only replacement discovery emits completion, and the old property listener is removed. |
+| `StartNotify` suspended until client release and clear finish | Resumed setup fails with `cancelled`, releases its late claim exactly once and installs no watch or value delivery. |
+| Enable notifications, invalidate cache with `ServicesResolved=false`, then release and clear | Native claim survives cache invalidation; release calls `StopNotify` once and clear removes the local listener. |
+| Hold a second `StartNotify`, queue public disconnect, then return success or `AlreadyExists` | Disconnect waits for reconfiguration and releases this client's claim once, even though setup replaces its property watch. Another client's connection and native notification claim survive. A failed reconfiguration retains the original claim for release. |
+| Invalidate resolution, replace the native characteristic with the same UUID, enable, then disconnect (setup settled or held) | The obsolete acquisition is stopped and the current acquisition is released. An obsolete-target stop error cannot skip current-target release. Failed replacement setup retains the preceding acquisition for disconnect. Peer's notification claim and connection survive. |
 
-Run from the repository root:
+Run the current regression suite from the repository root:
 
 ```sh
-(cd quick_blue_linux && flutter test test/gatt_session_test.dart \
-  --plain-name 'characterization:' --reporter expanded)
+(cd quick_blue_linux && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart test/notification_target_replacement_test.dart --reporter expanded)
 ```
 
-The tests control ordering explicitly. A replacement is a new fake object at the
-same address, not a physical reconnect. Passing these assertions confirms the
-gaps still exist; it does not establish safe teardown, real BlueZ cleanup or
-D-Bus ownership release. Do not assume cancellation prevents late discovery
-events or releases native notification ownership.
+
+The one-shot `FutureGate` observes setup entry before teardown and explicitly
+releases it afterward; no sleep determines ordering. Replacement is a new fake
+BlueZ object at the same address, not a physical reconnect. Current regressions
+require cleared discovery to fail with `cancelled` without replacement-lifetime
+emissions, and late notification setup to release its claim without installing
+a watch or delivering values. These corrections are part of the headless Linux
+lifecycle implementation. Fake-BlueZ tests do not prove real BlueZ cleanup,
+D-Bus ownership release or hardware semantics.
+
+Native claim identity is separate from local property-subscription identity and
+the discovery cache. Controlled reconfiguration tests in
+[notification_reconfiguration_test.dart](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/notification_reconfiguration_test.dart) assert public
+disconnect completion and external fake native ownership, not only local maps.
+They do not exercise real D-Bus reference counting or physical notification delivery.
+The [native-target replacement tests](https://github.com/prefanatic/quick_blue/blob/master/quick_blue_linux/test/notification_target_replacement_test.dart)
+also distinguish lifetime identity from native endpoint identity, including an
+obsolete endpoint that throws during stop. These are fake ownership assertions,
+not hardware proof or a guarantee that a failed native stop eventually succeeds.
+`quick_blue_linux/test/notification_native_proxy_test.dart` uses real BlueZ
+wrappers and objects with a fake D-Bus method boundary. Fresh wrappers and object
+recreation at the same path must retain a live claim after successful setup.
+Retirement is followed by current-target confirmation; pending/error controls
+check disconnect ordering and release. This is not an uninterrupted handoff or
+evidence of real bus ownership, hardware cleanup or notification delivery.
+
 
 ## Verification gaps
+
+### Headless proof boundaries
+
+The [external CLI fixture](install.md#operator-cli-fixture) compiles with
+standalone Dart and starts `--help` with DISPLAY/WAYLAND_DISPLAY absent; help
+does not contact BlueZ. The separately compiled fake flow uses public APIs,
+asserts scan/selection/connect/discovery/read/explicit write/notify/cancel/
+disconnect ordering and cleanup without a bus, engine, agent or radio.
+Pairing and CLI tests use injected errors to check that failures reach callers
+without automatic bond replacement or pairing with another device. They do not
+test authentication. Real scanning, pairing, GATT delivery, service-account
+permissions and physical Zero 2 W memory use/throughput remain untested.
+ARM64 library loading can be checked separately with the
+[QEMU verifier](testing.md#arm64-build-and-controlled-runtime); it does not test
+radio or kernel behavior. The [publication metadata issue](install.md#publication-compatibility-limit)
+also prevents a hosted release.
 
 - Runtime BLE multi-engine suites exist for Android and iOS. Other ownership
   implementations have unit/native coverage, not equivalent runtime suites.
