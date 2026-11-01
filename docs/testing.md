@@ -26,11 +26,14 @@ flutter --version
 flutter pub get
 flutter pub deps --json
 flutter analyze
-for package in quick_blue quick_blue/example quick_blue_darwin quick_blue_linux quick_blue_platform_interface quick_blue_windows; do
+for package in quick_blue quick_blue/example quick_blue_darwin quick_blue_linux quick_blue_linux_dart quick_blue_platform_interface quick_blue_windows; do
   (cd "$package" && flutter test) || exit
 done
 ```
 
+The seven-suite Flutter loop mirrors CI. `quick_blue_core` is tested separately
+with standalone Dart by the [standalone consumer verifier](#standalone-package-boundary),
+not by this Flutter matrix.
 
 Older Flutter versions are no longer supported. Keep both CI pins and Flutter
 package constraints aligned when advancing this floor; standalone Dart 3.13
@@ -330,10 +333,10 @@ Run the real channel control flow against scripted syscall wrappers, without
 loading BlueZ or opening a Bluetooth socket:
 
 ```sh
-(cd quick_blue_linux && flutter test test/l2cap_channel_test.dart \
+(cd quick_blue_linux_dart && flutter test test/l2cap_channel_test.dart \
   test/l2cap_harness_test.dart --reporter expanded)
-(cd quick_blue_linux && flutter test --reporter expanded)
-(cd quick_blue_linux && flutter analyze)
+(cd quick_blue_linux_dart && flutter test --reporter expanded)
+(cd quick_blue_linux_dart && flutter analyze)
 (cd quick_blue/example && flutter build linux --debug)
 ```
 
@@ -359,7 +362,7 @@ from `PATH`; Flutter's test runner uses the Flutter toolchain's `dart` on `PATH`
 For a safely bounded single reproduction:
 
 ```sh
-(cd quick_blue_linux && flutter test test/l2cap_harness_test.dart \
+(cd quick_blue_linux_dart && flutter test test/l2cap_harness_test.dart \
   --plain-name 'send-einval: watchdog termination is failure characterization' \
   --reporter expanded)
 ```

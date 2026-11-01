@@ -40,7 +40,7 @@ check lifetime behavior with fake BlueZ objects:
 Run the current regression suite from the repository root:
 
 ```sh
-(cd quick_blue_linux && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart test/notification_target_replacement_test.dart --reporter expanded)
+(cd quick_blue_linux_dart && dart test test/gatt_session_test.dart test/notification_reconfiguration_test.dart test/notification_target_replacement_test.dart --reporter expanded)
 ```
 
 
