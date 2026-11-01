@@ -272,6 +272,20 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         }
     }
 
+    // Called only while the broker holds its connection-registry lock. Observer
+    // lifetime follows attachment/retirement, never delayed state delivery.
+    override fun beginGattConnection(deviceId: String) {
+        repairObserver.connect(deviceId)
+    }
+
+    override fun retireGattConnection(deviceId: String) {
+        val token = repairObserver.connectionToken(deviceId)
+        val reset = repairObserver.disconnectIfCurrent(deviceId, token) ?: return
+        mainThreadHandler.post {
+            if (isAttachedToEngine) repairChangesListener.onRepairChanged(reset)
+        }
+    }
+
     override fun emitConnectionState(
         deviceId: String,
         state: PlatformConnectionState,
@@ -279,14 +293,8 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         nativeStatus: Int,
     ) {
         if (!isAttachedToEngine) return
-        val repairConnectionToken = repairObserver.connectionToken(deviceId)
-        // Invalidate on the native callback thread, not in the queued Flutter
-        // delivery: reconnect can start before the main thread drains it.
-        val repairReset = if (state == PlatformConnectionState.DISCONNECTED)
-            repairObserver.disconnectIfCurrent(deviceId, repairConnectionToken) else null
         mainThreadHandler.post {
             if (!isAttachedToEngine) return@post
-            repairReset?.let { repairChangesListener.onRepairChanged(it) }
             sendToFlutter {
                 it.onConnectionStateChange(
                     PlatformConnectionStateChange(
@@ -559,23 +567,15 @@ class QuickBluePlugin : FlutterPlugin, PluginRegistry.ActivityResultListener,
         ensureBluetoothConnectPermission()
 
         executor.execute {
-            val previousToken = repairObserver.connectionToken(deviceId)
-            repairObserver.connect(deviceId)
-            try {
-                AndroidGattBroker.connect(
-                    this,
-                    context,
-                    bluetoothManager.adapter.getRemoteDevice(deviceId),
-                )
-            } catch (error: Throwable) {
-                if (previousToken == null) repairObserver.disconnect(deviceId)
-                throw error
-            }
+            AndroidGattBroker.connect(
+                this,
+                context,
+                bluetoothManager.adapter.getRemoteDevice(deviceId),
+            )
         }
     }
 
     override fun disconnect(deviceId: String) {
-        repairChangesListener.onRepairChanged(repairObserver.disconnect(deviceId))
         disableUnclaimedNotifications(AndroidGattBroker.disconnect(this, deviceId))
     }
 

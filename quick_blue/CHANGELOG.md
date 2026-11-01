@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Serialize Android repair observation attachment/retirement with broker connection
+  ownership, so delayed old disconnect delivery cannot clear a replacement repair.
+  Add a held-close regression using actual broker/plugin/observer code over mocked
+  Android IO; physical Android 17 repair remains unverified.
+
 
 - Drop older Flutter support: require stable Flutter 3.47.7 (bundled Dart
   3.13.5), pin primary and fresh-resolution minimum-toolchain CI to that release,

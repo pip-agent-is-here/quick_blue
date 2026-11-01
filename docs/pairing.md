@@ -4,7 +4,7 @@ title: "Pairing and security failures"
 description: "Gate bonding APIs and handle coordinated security recovery without blind retries."
 tags: ["security", "bonding", "errors"]
 
-sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/quick_blue_exception.dart"}, {"id": "source3", "resource": "../quick_blue/lib/src/android_security_recovery.dart"}, {"id": "source4", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "bondWaitTests", "resource": "../quick_blue_platform_interface/test/bond_state_wait_test.dart"}, {"id": "repair-native", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidRepairObserver.kt"}]
+sources: [{"id": "source1", "resource": "../quick_blue_platform_interface/lib/src/bluetooth_device.dart"}, {"id": "source2", "resource": "../quick_blue_platform_interface/lib/src/quick_blue_exception.dart"}, {"id": "source3", "resource": "../quick_blue/lib/src/android_security_recovery.dart"}, {"id": "source4", "resource": "../quick_blue_platform_interface/test/bluetooth_device_connection_test.dart"}, {"id": "bondWaitTests", "resource": "../quick_blue_platform_interface/test/bond_state_wait_test.dart"}, {"id": "repair-broker", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidGattBroker.kt"}, {"id": "repair-retirement", "resource": "../quick_blue/android/src/test/kotlin/com/example/quick_blue/RepairBrokerRetirementTest.kt"}, {"id": "repair-native", "resource": "../quick_blue/android/src/main/kotlin/com/example/quick_blue/AndroidRepairObserver.kt"}]
 ---
 
 # Pairing and security failures
@@ -95,6 +95,11 @@ BONDED is not repair success: the active repair generation must observe enabled
 LE encryption with status zero. KEY_MISSING during that repair reports failure;
 unrelated or stale terminal events cannot establish success. Disconnect clears
 eligibility and a replacement connection needs fresh context.[^repair-native]
+Observation attachment and retirement are serialized with the Android broker's
+connection registry, before native close or queued Flutter delivery. A held old
+disconnect cannot invalidate a replacement connection's repair observation.
+The JVM held-close regression exercises the real broker, plugin and observer
+with mocked Android IO; it does not reproduce radio scheduling or OEM broadcasts.[^repair-broker][^repair-retirement]
 
 The Dart coordinator reads the repair snapshot and observes events before recovery.
 Once repair is active, its result supersedes the legacy bonding path. The default
@@ -201,3 +206,5 @@ See [capabilities](capabilities.md) and [observability privacy](observability.md
 
 [^source3]: AndroidSecurityRecovery.perform and its bounded legacy/repair branches.
 [^repair-native]: AndroidRepairObserver.dispatch connection-scoped API 37 correlation.
+[^repair-broker]: Attachment and retirement under the broker connection-registry lock.
+[^repair-retirement]: Held native close with replacement repair and duplicate/current disconnect controls.
