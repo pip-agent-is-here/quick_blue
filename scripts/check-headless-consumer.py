@@ -18,6 +18,7 @@ import tempfile
 from urllib.parse import unquote, urljoin, urlparse
 
 PACKAGES = ('quick_blue_core', 'quick_blue_platform_interface', 'quick_blue_linux')
+FLUTTER_PACKAGES = (*PACKAGES, 'quick_blue', 'quick_blue_darwin', 'quick_blue_windows', 'quick_blue_web')
 
 
 def run(args, cwd, env):
@@ -72,7 +73,7 @@ def main():
            for parent in dart.parents):
         raise ValueError('Use a standalone SDK, not the Flutter SDK wrapper')
     snapshot = fixture / 'packages'
-    names = (*PACKAGES, 'quick_blue', 'quick_blue_darwin', 'quick_blue_windows') if args.flutter else PACKAGES
+    names = FLUTTER_PACKAGES if args.flutter else PACKAGES
     hashes = {}
     for name in names:
         source = root / name

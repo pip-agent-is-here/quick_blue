@@ -1,5 +1,19 @@
 ## Unreleased
 
+- Add a federated Web Bluetooth backend with a direct-gesture `requestDevice`
+  chooser, authorized GATT discovery/read/write/notifications, bounded waits and
+  stale-session fencing. Native scanning, bonding, MTU and L2CAP remain unsupported
+  in browsers. Add Chrome interop contracts and a read-only-by-default browser
+  hardware loop with explicit stage outcomes and JSON export; builds and simulator
+  tests do not constitute real-radio verification.
+  Standalone hardware checks retain full-suite blocked stages and provenance;
+  cancellation confirmation is bounded and excludes denial/API/timeout errors.
+  Hardware profiles can independently configure chooser name/service filters and
+  optional service grants; undocumented reads remain explicitly blocked while
+  safe connection/discovery loops still execute.
+  Delegate chooser calls synchronously through the shared core facade and retain
+  snapshot-bound notification submission guards on web.
+
 - Queue Darwin writes without response when CoreBluetooth's buffer is full.
   Resume writes from `peripheralIsReady(toSendWriteWithoutResponse:)` and reject
   affected unsent writes on disconnect, engine detach, or service invalidation.
@@ -113,6 +127,7 @@
   package analysis/tests. Bluetooth hardware and physical ARM64 devices remain
   untested. Linux publication still fails because Pub requires a Flutter minimum
   for its plugin metadata; matched-source installations remain necessary.
+
 
 
 ### Fixed
