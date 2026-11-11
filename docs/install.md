@@ -10,7 +10,7 @@ sources: [{"id": "source1", "resource": "../quick_blue/pubspec.yaml"}, {"id": "s
 # Install from Git
 
 The documented repository may be ahead of hosted releases. Install the app-facing
-package and override all six dependencies; do not mix Git and hosted platform
+package and override all seven dependencies; do not mix Git and hosted platform
 implementations. This app `pubspec.yaml` fragment follows the repository recipe.[^source3]
 
 ```yaml
@@ -52,9 +52,14 @@ dependency_overrides:
       url: https://github.com/prefanatic/quick_blue.git
       ref: master
       path: quick_blue_windows
+  quick_blue_web:
+    git:
+      url: https://github.com/prefanatic/quick_blue.git
+      ref: master
+      path: quick_blue_web
 ```
 
-Replace all seven `master` refs with the same tested commit SHA for reproducibility.
+Replace all eight `master` refs with the same tested commit SHA for reproducibility.
 Run `flutter pub get` in your app. For repository development, run it at the
 workspace root instead.
 

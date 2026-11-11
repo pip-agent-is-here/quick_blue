@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-FACADE_DEPENDENCIES = ("quick_blue_platform_interface", "quick_blue_core", "quick_blue_darwin", "quick_blue_linux", "quick_blue_windows")
+FACADE_DEPENDENCIES = ("quick_blue_platform_interface", "quick_blue_core", "quick_blue_darwin", "quick_blue_linux", "quick_blue_windows", "quick_blue_web")
 PACKAGES = (*FACADE_DEPENDENCIES, "quick_blue_linux_dart", "quick_blue")
 
 
@@ -43,7 +43,7 @@ class PublishTests(unittest.TestCase):
     def test_valid(self):
         result, calls = self.fixture()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(calls), 7)
+        self.assertEqual(len(calls), len(PACKAGES))
         self.assertTrue(all("publish --dry-run --ignore-warnings" in call for call in calls))
 
     def test_usage(self):

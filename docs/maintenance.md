@@ -132,7 +132,7 @@ The Linux Flutter shell owns plugin metadata and its Flutter minimum; the pure
 Dart backend has neither. Keep release validation enabled, but do not equate a
 passing dry-run with registry name ownership, availability or an uploaded release.
 
-All seven package manifests (including core and the Linux Dart backend) share a version.
+All eight package manifests (including core, web and the Linux Dart backend) share a version.
 In the same change, bump every
 package's `pubspec.yaml` version and align federated constraints: each platform
 package depends on `quick_blue_platform_interface` at that version and the

@@ -72,6 +72,12 @@ evidence of real bus ownership, hardware cleanup or notification delivery.
 
 ## Verification gaps
 
+- Web Bluetooth browser simulator tests and web builds do not prove permission
+  UI or real-radio behavior. The [browser hardware path](web.md) exports explicit
+  stage outcomes; hardware acceptance remains pending until run on a known
+  peripheral. Browsers cannot provide raw advertisements, system-connected
+  lookup, bonding, MTU, L2CAP or cross-tab/native-engine ownership guarantees.
+
 ### Headless proof boundaries
 
 The [external CLI fixture](install.md#operator-cli-fixture) compiles with
@@ -87,6 +93,7 @@ ARM64 library loading can be checked separately with the
 [QEMU verifier](testing.md#arm64-build-and-controlled-runtime); it does not test
 radio or kernel behavior. Distribution remains [Git/local only](install.md#publication-compatibility-limit);
 registry name ownership and hosted availability are not established by validation.
+
 
 - Runtime BLE multi-engine suites exist for Android and iOS. Other ownership
   implementations have unit/native coverage, not equivalent runtime suites.
