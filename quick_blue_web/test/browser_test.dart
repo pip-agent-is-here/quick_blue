@@ -100,6 +100,30 @@ void main() {
     return device;
   }
 
+  test('notification wrapper preserves the bound submission guard', () async {
+    final device = await ready();
+    var validations = 0;
+    final done = Completer<void>();
+    final errors = <Object>[];
+    final subscription = platform
+        .characteristicNotifications(
+          device.deviceId,
+          '180f',
+          '2a19',
+          beforeSubmission: () {
+            validations++;
+            throw StateError('invalidated snapshot');
+          },
+        )
+        .listen((_) {}, onError: errors.add, onDone: done.complete);
+    await done.future.timeout(const Duration(seconds: 1));
+    expect(validations, 1);
+    expect(errors.single, isA<StateError>());
+    expect(number('qb.starts'), 0);
+    await subscription.cancel();
+    await device.disconnect();
+  });
+
   test(
     'chooser timeout rejects late selection and blocks overlapping chooser',
     () async {

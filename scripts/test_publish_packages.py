@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-PACKAGES = ("quick_blue_platform_interface", "quick_blue_darwin", "quick_blue_linux", "quick_blue_windows", "quick_blue_web", "quick_blue")
+PACKAGES = ("quick_blue_platform_interface", "quick_blue_core", "quick_blue_darwin", "quick_blue_linux", "quick_blue_windows", "quick_blue_web", "quick_blue")
 
 
 class PublishTests(unittest.TestCase):
@@ -19,6 +19,8 @@ class PublishTests(unittest.TestCase):
             for package in PACKAGES:
                 (root / package).mkdir()
                 dependencies = PACKAGES[:-1] if package == "quick_blue" else ((PACKAGES[0],) if package != PACKAGES[0] else ())
+                if package == "quick_blue_linux":
+                    dependencies += ("quick_blue_core",)
                 (root / package / "pubspec.yaml").write_text(
                     f"name: {package}\nversion: 1.2.3\ndependencies:\n" +
                     "".join(f"  {name}: ^1.2.3\n" for name in dependencies))

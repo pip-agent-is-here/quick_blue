@@ -73,8 +73,12 @@ The federated `quick_blue_web` package uses the maintained
 BluetoothUUID shell, not the required GATT bindings. Reusing the existing binding
 avoids a second custom JS Bluetooth API; Quick Blue owns session deadlines and
 its shared handle/notification coordinators. It does not use that package's
-high-level availability singleton or automatic reconnection. No unmerged core
-extraction is required.[^backend]
+high-level availability singleton or automatic reconnection. The Flutter facade
+reexports `quick_blue_core`; its `requestDevice` delegate calls the platform
+synchronously without availability preflight, preserving the gesture boundary.
+See the core delegate in `quick_blue_core/lib/src/quick_blue.dart` and the
+public/legacy entrypoint identity and synchronous-call regression in
+`quick_blue/test/request_device_test.dart` (repository-root paths).[^backend]
 
 Browser waits are bounded at 20 seconds by default. A timeout ends the affected
 session and removes event listeners; a disconnect rejects pending session waits.

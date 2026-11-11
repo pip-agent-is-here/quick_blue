@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quick_blue/quick_blue.dart';
+import 'package:quick_blue/src/quick_blue.dart' as legacy;
+import 'package:quick_blue_core/quick_blue_core.dart' as core;
 import 'package:quick_blue_platform_interface/quick_blue_platform_interface.dart';
 import 'test_support/fake_quick_blue_platform.dart';
 
@@ -28,6 +30,8 @@ void main() {
     () async {
       final platform = ChooserPlatform();
       QuickBluePlatform.instance = platform;
+      expect(QuickBlue, core.QuickBlue);
+      expect(legacy.QuickBlue, core.QuickBlue);
       final pending = QuickBlue.requestDevice(
         serviceUuids: ['180f'],
         optionalServices: ['180a'],

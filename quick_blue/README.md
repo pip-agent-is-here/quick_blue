@@ -6,6 +6,19 @@ Android, iOS, macOS, Windows, Linux, and supported Web Bluetooth browsers.
 Web uses a direct-gesture `QuickBlue.requestDevice` chooser instead of raw
 scanning. See the [browser setup and hardware runbook](../docs/web.md).
 
+Use `gatt.boundCharacteristic(...)` to reject new reads, writes and notification
+changes after a reported GATT database change. Existing `gatt.characteristic(...)`
+and direct-ID handles remain unbound. See [GATT handles](../docs/gatt.md#snapshot-bound-submissions).
+
+For standalone Linux services use the [public headless operator CLI](../quick_blue_linux/example/README.md)
+over `quick_blue_core` plus `quick_blue_linux`. Its opt-in pairing policy and
+external BlueZ agent/service-user requirements are documented in
+[pairing guidance](../docs/pairing.md#headless-linux-agent-lifecycle). Flutter
+imports and normal library security recovery remain unchanged. Use matched source
+revisions: the [Linux publication metadata issue](../docs/install.md#publication-compatibility-limit)
+currently prevents a hosted release. Bluetooth hardware and physical ARM64 devices
+remain untested.
+
 - [Example app](https://github.com/prefanatic/quick_blue/tree/master/quick_blue/example)
 - [Changelog](https://github.com/prefanatic/quick_blue/blob/master/quick_blue/CHANGELOG.md)
 - [Issue tracker](https://github.com/prefanatic/quick_blue/issues)
@@ -32,7 +45,7 @@ rules. This package README remains a package-level introduction and usage guide.
 
 | Target | Minimum or runtime requirement |
 | :--- | :--- |
-| Flutter | 3.44.2 (CI and hardware verification run 3.47.6) |
+| Flutter | 3.47.7 (declared minimum and pinned CI; older releases unsupported) |
 | Dart | 3.12.2 |
 | Android | API 26 |
 | iOS | 13.0 |
@@ -55,6 +68,11 @@ dependencies:
       path: quick_blue
 
 dependency_overrides:
+  quick_blue_core:
+    git:
+      url: https://github.com/prefanatic/quick_blue.git
+      ref: master
+      path: quick_blue_core
   quick_blue_platform_interface:
     git:
       url: https://github.com/prefanatic/quick_blue.git
@@ -82,7 +100,7 @@ dependency_overrides:
       path: quick_blue_web
 ```
 
-For reproducible builds, replace `master` with a tested commit SHA in all six
+For reproducible builds, replace `master` with a tested commit SHA in all seven
 entries. If these changes become available in a hosted release, replace the Git
 dependency and overrides with the corresponding version constraint.
 
@@ -372,6 +390,12 @@ must be confirmed. Choose a size and write mode supported by the characteristic
 and the peripheral protocol. When negotiated MTU lookup is supported, a common
 upper bound for one ATT write payload is `mtu - 3`, but the application protocol
 may require a smaller value.
+
+On iOS and macOS, Quick Blue queues writes without response when CoreBluetooth's
+buffer is full. The readiness callback resumes these writes in order.
+The future completes after native handoff. Disconnect, engine detach, or service
+invalidation rejects affected unsent writes. See [write backpressure](https://github.com/prefanatic/quick_blue/blob/master/docs/gatt.md#write-payload-limits-and-backpressure)
+for lifecycle and verification limits.
 
 ### GATT service changes
 

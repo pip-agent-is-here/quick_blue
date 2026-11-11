@@ -42,6 +42,27 @@ class LinuxGattSession {
       <String, _DevicePropertySubscriptions>{};
   final Map<String, Future<void>> _serviceDiscoveryEmits =
       <String, Future<void>>{};
+  final Map<String, Completer<void>> _deviceCancellations = {};
+  // Survives clearDevice: retired native setup must settle and release its
+  // client claim before a new generation can acquire the same claim.
+  final Map<String, Future<void>> _notificationOperations = {};
+  // Native ownership outlives replaceable property watches and GATT caches.
+  final Map<String, Map<String, _NotificationClaim>> _notificationClaims = {};
+
+  Completer<void> _cancellation(String deviceId) =>
+      _deviceCancellations.putIfAbsent(deviceId, Completer<void>.new);
+
+  void _checkCurrent(String deviceId, Completer<void> cancellation) {
+    if (cancellation.isCompleted) {
+      throw QuickBlueException(
+        code: QuickBlueErrorCode.cancelled,
+        operation: 'gatt',
+        deviceId: deviceId,
+        message: 'Device state was cleared.',
+      );
+    }
+  }
+
   final Map<String, bool> _servicesResolvedStates = <String, bool>{};
   final Map<String, String> _gattFingerprints = <String, String>{};
   final Map<String, _ResolvedCharacteristic> _resolvedCharacteristics =
@@ -69,6 +90,7 @@ class LinuxGattSession {
   }
 
   Future<void> clearDevice(String deviceId) async {
+    _deviceCancellations.remove(deviceId)?.complete();
     _servicesResolvedStates.remove(deviceId);
     _gattFingerprints.remove(deviceId);
     _serviceDiscoveryEmits.remove(deviceId);
@@ -81,6 +103,46 @@ class LinuxGattSession {
     String service,
     String characteristic,
     BleInputProperty bleInputProperty,
+  ) async {
+    final cancellation = _cancellation(deviceId);
+    final operationKey =
+        '$deviceId/${_characteristicKey(service, characteristic)}';
+    await _serializeNotification(operationKey, () async {
+      _checkCurrent(deviceId, cancellation);
+      await _setNotifiable(
+        deviceId,
+        service,
+        characteristic,
+        bleInputProperty,
+        cancellation,
+      );
+    });
+  }
+
+  Future<void> _serializeNotification(
+    String operationKey,
+    Future<void> Function() action,
+  ) async {
+    final previous = _notificationOperations[operationKey];
+    final done = Completer<void>();
+    _notificationOperations[operationKey] = done.future;
+    try {
+      await previous;
+      await action();
+    } finally {
+      done.complete();
+      if (identical(_notificationOperations[operationKey], done.future)) {
+        _notificationOperations.remove(operationKey);
+      }
+    }
+  }
+
+  Future<void> _setNotifiable(
+    String deviceId,
+    String service,
+    String characteristic,
+    BleInputProperty bleInputProperty,
+    Completer<void> cancellation,
   ) async {
     final resolved = await _resolveCharacteristic(
       deviceId,
@@ -101,6 +163,11 @@ class LinuxGattSession {
           characteristicId: characteristic,
           action: targetCharacteristic.stopNotify,
         );
+      }
+      final claim = _notificationClaims[deviceId]?[key];
+      if (claim != null) {
+        claim.characteristics.remove(targetCharacteristic);
+        await _releaseNotificationClaim(deviceId, key, claim);
       }
       await _removeNotificationSubscription(deviceId, key);
       return;
@@ -136,7 +203,56 @@ class LinuxGattSession {
       // This D-Bus client already enabled notifications.
     }
 
+    final claims = _notificationClaims.putIfAbsent(deviceId, () => {});
+    final existingClaim = claims[key];
+    final claim =
+        existingClaim != null &&
+            identical(existingClaim.cancellation, cancellation)
+        ? existingClaim
+        : _NotificationClaim(cancellation);
+    claim.characteristics.add(targetCharacteristic);
+    claims[key] = claim;
+
+    // BlueZ does not expose a characteristic's D-Bus path here. Fresh wrappers
+    // can address either the same endpoint (even after object recreation) or a
+    // different one. Retirement may therefore stop the just-enabled claim.
+    // Confirm acquisition AFTER all retirement attempts, including failed stops
+    // whose native side effects are unknown. Do not retire before initial setup:
+    // a rejected replacement must leave the preceding acquisition available.
+    final retiredTargets = claim.characteristics.any(
+      (target) => !identical(target, targetCharacteristic),
+    );
+    await _releaseNotificationClaim(
+      deviceId,
+      key,
+      claim,
+      except: targetCharacteristic,
+    );
+    if (retiredTargets) {
+      try {
+        await _runBlueZGattOperation(
+          operation: 'setNotifiable',
+          deviceId: deviceId,
+          serviceId: service,
+          characteristicId: characteristic,
+          action: targetCharacteristic.startNotify,
+        );
+      } on BlueZAlreadyExistsException {
+        // A different endpoint was retired; the current claim is still live.
+      } on Object {
+        // Initial setup acquired a claim, but the caller will observe failure
+        // and may never request teardown (for example a failed stream setup).
+        await _releaseNotificationClaim(deviceId, key, claim);
+        rethrow;
+      }
+    }
+
+    if (cancellation.isCompleted) {
+      await _releaseNotificationClaim(deviceId, key, claim);
+      _checkCurrent(deviceId, cancellation);
+    }
     await _removeNotificationSubscription(deviceId, key);
+    _checkCurrent(deviceId, cancellation);
 
     final subscription = targetCharacteristic.propertiesChanged.listen(
       (changed) {
@@ -241,8 +357,10 @@ class LinuxGattSession {
       return existing;
     }
 
+    final cancellation = _cancellation(device.address);
     final emit = () async {
-      await _waitForServicesResolved(device);
+      await _waitForServicesResolved(device, cancellation: cancellation);
+      _checkCurrent(device.address, cancellation);
       _emitResolvedServices(device);
     }();
     _serviceDiscoveryEmits[device.address] = emit;
@@ -302,12 +420,14 @@ class LinuxGattSession {
   Future<void> _waitForServicesResolved(
     BlueZDevice device, {
     Duration timeout = const Duration(seconds: 15),
+    Completer<void>? cancellation,
   }) async {
     return waitForDeviceProperty(
       device,
       propertyName: 'ServicesResolved',
       isReady: () => device.servicesResolved,
       timeout: timeout,
+      cancelled: (cancellation ?? _cancellation(device.address)).future,
     );
   }
 
@@ -317,8 +437,11 @@ class LinuxGattSession {
     String characteristicId,
   ) async {
     final device = _getDevice(deviceId);
+    final cancellation = _cancellation(deviceId);
     await _ensureConnected(device);
-    await _waitForServicesResolved(device);
+    _checkCurrent(deviceId, cancellation);
+    await _waitForServicesResolved(device, cancellation: cancellation);
+    _checkCurrent(deviceId, cancellation);
 
     final canonicalService = canonicalizeUuid(serviceId);
     final canonicalCharacteristic = canonicalizeUuid(characteristicId);
@@ -401,22 +524,53 @@ class LinuxGattSession {
   }
 
   Future<void> stopNotificationsForClient(String deviceId) async {
-    final keys =
-        _notificationSubscriptions[deviceId]?.keys.toList() ?? const [];
-    for (final key in keys) {
-      final resolved = _resolvedCharacteristics['$deviceId|$key'];
-      if (resolved == null) {
-        continue;
-      }
+    final claims = Map<String, _NotificationClaim>.of(
+      _notificationClaims[deviceId] ?? {},
+    );
+    // Enqueue every release before yielding. Both setup and teardown share this
+    // boundary across clearDevice generations; a late native stop must finish
+    // before a retry can acquire the same D-Bus client's notification claim.
+    final releases = <Future<void>>[];
+    for (final entry in claims.entries) {
+      final key = entry.key;
+      releases.add(
+        _serializeNotification('$deviceId/$key', () async {
+          // Reconfiguration can replace both watch and native endpoint. The
+          // lifetime record includes preceding acquisitions, not newer ones.
+          if (!identical(_notificationClaims[deviceId]?[key], entry.value)) {
+            return;
+          }
+          await _releaseNotificationClaim(deviceId, key, entry.value);
+        }),
+      );
+    }
+    await Future.wait(releases);
+  }
+
+  Future<void> _releaseNotificationClaim(
+    String deviceId,
+    String key,
+    _NotificationClaim claim, {
+    BlueZGattCharacteristic? except,
+  }) async {
+    for (final target in claim.characteristics.toList()) {
+      if (identical(target, except)) continue;
       try {
-        await resolved.characteristic.stopNotify();
+        await target.stopNotify();
+        claim.characteristics.remove(target);
       } on Object catch (error, stackTrace) {
+        // An obsolete endpoint may no longer exist. Its failure must not
+        // prevent release of the current endpoint; retain it for a later try.
         _logger.warning(
           'Failed to release this engine\'s notification for $deviceId',
           error,
           stackTrace,
         );
       }
+    }
+    if (claim.characteristics.isEmpty &&
+        identical(_notificationClaims[deviceId]?[key], claim)) {
+      _notificationClaims[deviceId]?.remove(key);
     }
   }
 
@@ -501,6 +655,13 @@ Future<T> _runBlueZGattOperation<T>({
       stackTrace,
     );
   }
+}
+
+class _NotificationClaim {
+  _NotificationClaim(this.cancellation);
+
+  final characteristics = Set<BlueZGattCharacteristic>.identity();
+  final Completer<void> cancellation;
 }
 
 class _ResolvedCharacteristic {

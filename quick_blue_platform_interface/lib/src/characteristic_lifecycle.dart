@@ -27,6 +27,7 @@ class CharacteristicLifecycleCoordinator {
     String service,
     String characteristic,
     BleInputProperty bleInputProperty,
+    void Function()? beforeSubmission,
   )
   setNotifiableWithSecurityRecovery;
 
@@ -81,6 +82,7 @@ class CharacteristicLifecycleCoordinator {
     String service,
     String characteristic, {
     BleInputProperty bleInputProperty = BleInputProperty.notification,
+    void Function()? beforeSubmission,
   }) {
     late StreamSubscription<Uint8List> valueSubscription;
     late Future<void> setUpNotification;
@@ -106,7 +108,13 @@ class CharacteristicLifecycleCoordinator {
       valueSubscription.pause();
       setUpNotification = () async {
         try {
-          await _acquire(deviceId, service, characteristic, bleInputProperty);
+          await _acquire(
+            deviceId,
+            service,
+            characteristic,
+            bleInputProperty,
+            beforeSubmission,
+          );
           acquired = true;
           valueSubscription.resume();
         } catch (error, stackTrace) {
@@ -138,6 +146,7 @@ class CharacteristicLifecycleCoordinator {
     String service,
     String characteristic,
     BleInputProperty bleInputProperty,
+    void Function()? beforeSubmission,
   ) {
     final key = _CharacteristicValueKey.fromParts(
       deviceId,
@@ -147,6 +156,7 @@ class CharacteristicLifecycleCoordinator {
     return _queue(key, () async {
       final active = _activeNotifications[key];
       if (active != null) {
+        beforeSubmission?.call();
         if (active.bleInputProperty != bleInputProperty) {
           throw QuickBlueException(
             code: QuickBlueErrorCode.invalidState,
@@ -168,6 +178,7 @@ class CharacteristicLifecycleCoordinator {
         service,
         characteristic,
         bleInputProperty,
+        beforeSubmission,
       );
       _activeNotifications[key] = _ActiveNotification(bleInputProperty);
     });

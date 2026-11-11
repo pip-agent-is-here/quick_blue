@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import '../models.dart';
 import 'observability.dart';
 import 'quick_blue_platform.dart';
+import 'quick_blue_exception.dart';
 
 /// A handle for a Bluetooth LE characteristic.
 ///
@@ -17,7 +18,9 @@ class BluetoothCharacteristic {
     required this.serviceId,
     required this.characteristicId,
     required QuickBluePlatform platform,
-  }) : _platform = platform;
+    bool Function()? isValidSnapshot,
+  }) : _platform = platform,
+       _isValidSnapshot = isValidSnapshot;
 
   /// The platform-specific device identifier.
   final String deviceId;
@@ -28,6 +31,21 @@ class BluetoothCharacteristic {
   /// The characteristic UUID.
   final String characteristicId;
   final QuickBluePlatform _platform;
+  final bool Function()? _isValidSnapshot;
+
+  void _ensureSnapshotValid(String operation) {
+    if (_isValidSnapshot?.call() ?? true) return;
+    throw QuickBlueException(
+      code: QuickBlueErrorCode.invalidState,
+      operation: operation,
+      deviceId: deviceId,
+      serviceId: serviceId,
+      characteristicId: characteristicId,
+      message:
+          'The bound GATT snapshot is invalid. Rediscover services and '
+          'resolve a fresh bound characteristic before submitting new IO.',
+    );
+  }
 
   /// Value updates for this characteristic.
   ///
@@ -51,21 +69,22 @@ class BluetoothCharacteristic {
   ///
   /// Security failures trigger one coordinated recovery attempt and retry.
   Future<void> setNotifiable(BleInputProperty bleInputProperty) {
+    _ensureSnapshotValid('setNotifiable');
     return QuickBlueInstrumentation.observeFuture<void>(
       kind: QuickBlueOperationKind.setNotifiable,
       deviceId: deviceId,
       serviceId: serviceId,
       characteristicId: characteristicId,
       inputProperty: bleInputProperty,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.setNotifiable(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('setNotifiable');
+        return _platform.setNotifiable(
           deviceId,
           serviceId,
           characteristicId,
           bleInputProperty,
-        ),
-      ),
+        );
+      }),
     );
   }
 
@@ -77,6 +96,30 @@ class BluetoothCharacteristic {
   Stream<Uint8List> notifications({
     BleInputProperty bleInputProperty = BleInputProperty.notification,
   }) {
+    if (_isValidSnapshot != null) {
+      return Stream<Uint8List>.multi((controller) {
+        try {
+          _ensureSnapshotValid('notifications');
+        } catch (error, stack) {
+          controller.addError(error, stack);
+          controller.close();
+          return;
+        }
+        final subscription = _notifications(bleInputProperty).listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+        controller
+          ..onPause = subscription.pause
+          ..onResume = subscription.resume
+          ..onCancel = subscription.cancel;
+      });
+    }
+    return _notifications(bleInputProperty);
+  }
+
+  Stream<Uint8List> _notifications(BleInputProperty bleInputProperty) {
     return QuickBlueInstrumentation.observeStream<Uint8List>(
       kind: QuickBlueOperationKind.notifications,
       deviceId: deviceId,
@@ -88,6 +131,9 @@ class BluetoothCharacteristic {
         serviceId,
         characteristicId,
         bleInputProperty: bleInputProperty,
+        beforeSubmission: _isValidSnapshot == null
+            ? null
+            : () => _ensureSnapshotValid('notifications'),
       ),
       valueSize: (value) => value.length,
     );
@@ -98,19 +144,20 @@ class BluetoothCharacteristic {
   /// The future completes with the bytes returned by the platform read.
   /// Security failures trigger one coordinated recovery attempt and retry.
   Future<Uint8List> read() async {
+    _ensureSnapshotValid('read');
     return QuickBlueInstrumentation.observeFuture<Uint8List>(
       kind: QuickBlueOperationKind.readCharacteristic,
       deviceId: deviceId,
       serviceId: serviceId,
       characteristicId: characteristicId,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.readCharacteristicValue(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('read');
+        return _platform.readCharacteristicValue(
           deviceId,
           serviceId,
           characteristicId,
-        ),
-      ),
+        );
+      }),
       measurements: (value) => <QuickBlueOperationMeasurement, num>{
         QuickBlueOperationMeasurement.byteCount: value.length,
       },
@@ -134,6 +181,7 @@ class BluetoothCharacteristic {
   /// retry of busy errors, chunking, or protocol framing is performed.
   /// A rejected acknowledged write is retried once after security recovery.
   Future<void> write(Uint8List value, BleOutputProperty bleOutputProperty) {
+    _ensureSnapshotValid('write');
     return QuickBlueInstrumentation.observeFuture<void>(
       kind: QuickBlueOperationKind.writeCharacteristic,
       deviceId: deviceId,
@@ -141,16 +189,16 @@ class BluetoothCharacteristic {
       characteristicId: characteristicId,
       outputProperty: bleOutputProperty,
       valueSize: value.length,
-      action: () => _platform.runWithSecurityRecovery(
-        deviceId,
-        () => _platform.writeValue(
+      action: () => _platform.runWithSecurityRecovery(deviceId, () {
+        _ensureSnapshotValid('write');
+        return _platform.writeValue(
           deviceId,
           serviceId,
           characteristicId,
           value,
           bleOutputProperty,
-        ),
-      ),
+        );
+      }),
     );
   }
 

@@ -602,6 +602,7 @@ class QuickBlueWeb extends QuickBluePlatform {
     String service,
     String characteristic, {
     BleInputProperty bleInputProperty = BleInputProperty.notification,
+    void Function()? beforeSubmission,
   }) {
     final controller = StreamController<Uint8List>();
     Future<void>? release;
@@ -614,6 +615,7 @@ class QuickBlueWeb extends QuickBluePlatform {
               service,
               characteristic,
               bleInputProperty: bleInputProperty,
+              beforeSubmission: beforeSubmission,
             )
             .listen(
               controller.add,
