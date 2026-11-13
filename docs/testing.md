@@ -72,7 +72,9 @@ compiles the Android example release classpath, so it needs a configured Android
 SDK, not merely Dart. Runtime pins are JNI 1.1.1 and JNIgen 1.0.1; Pigeon is 30.0.2
 throughout the workspace. Darwin and Windows still generate channel APIs.
 
-The Android runtime job uses an emulator and two Flutter engines. It first
+The Android runtime job provisions command-line tools and an isolated AVD home,
+checks the AVD registration, and bounds device discovery to two minutes. It uses
+an emulator and two Flutter engines. It first
 requires the channel-only baseline host to fail with the missing native-instance
 error, then restores the exact candidate. It removes primary channel HostApi
 handlers to require JNI dispatch, destroys secondary engines and detaches the

@@ -575,13 +575,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export ANDROID_USER_HOME="$RUNNER_TEMP/quick-blue-android"
+          export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           sdkmanager 'platform-tools' 'emulator' 'system-images;android-36;google_apis;x86_64'
-          echo no | avdmanager create avd --force --name quick_blue_native --package 'system-images;android-36;google_apis;x86_64'
+          echo no | avdmanager create avd --force --name quick_blue_native --path "$ANDROID_AVD_HOME/quick_blue_native.avd" --package 'system-images;android-36;google_apis;x86_64'
+          test -f "$ANDROID_AVD_HOME/quick_blue_native.ini"
           sudo setfacl -m "u:$USER:rw" /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -avd quick_blue_native -port 5554 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect > emulator.log 2>&1 &
           emulator_pid=$!
           trap 'kill "$emulator_pid" || true' EXIT
-          adb -s emulator-5554 wait-for-device
+          timeout 120 adb -s emulator-5554 wait-for-device || { cat emulator.log; exit 1; }
           for attempt in {1..120}; do
             if [[ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then break; fi
             kill -0 "$emulator_pid"
