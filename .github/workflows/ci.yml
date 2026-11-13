@@ -565,6 +565,11 @@ jobs:
         with:
           channel: stable
           flutter-version: "3.50.0"
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: "12266719"
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: flutter pub get
       - name: Execute generated JNI boundary with two real Flutter engines
         shell: bash
