@@ -187,8 +187,9 @@ class QuickBlueAndroid extends QuickBluePlatform {
 
   @override
   Future<bool> isBluetoothAvailable() async {
-    // This request has no Dart callbacks. Installing FlutterApi handlers would
-    // reject a registered background-isolate messenger before it can send.
+    // Preserve root-isolate callback initialization, but a registered worker
+    // cannot install incoming handlers and this query needs no Dart callbacks.
+    if (ServicesBinding.rootIsolateToken != null) _ensureInitialized();
     final availability = _availabilityApi;
     return availability != null
         ? availability.isBluetoothAvailable()

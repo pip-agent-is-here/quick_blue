@@ -78,8 +78,17 @@ an emulator and two Flutter engines. It first
 requires the channel-only baseline host to fail with the missing native-instance
 error, then restores the exact candidate. It removes primary channel HostApi
 handlers to require JNI dispatch, destroys secondary engines and detaches the
-primary plugin while a peer remains live, checking stale-handle errors and
-missing-name peer isolation.
+primary plugin while a peer remains live, checking stale-handle errors,
+structured public missing-registration errors and missing-name peer isolation.
+It reattaches the plugin on the same engine and requires the unchanged public
+singleton to recover using JNI while retained generated handles remain stale.
+A registered worker first compares the actual generated engine channel with the
+public availability result; removing that engine's channel while a peer stays
+live must yield `channel-error`, never a peer JNI result. The original public
+adapter is replayed separately: its unconditional incoming-callback setup fails
+in a worker even though the original generated request/reply channel succeeds.
+That baseline failure is characterization, not a claim of prior public worker
+support. Both negative-control logs are retained.
 It makes no Bluetooth hardware assertion; an availability result of false is
 valid on an emulator. The JVM registry test uses synthetic keys and cannot prove
 JNI execution or binding engine-ID plumbing. The Dart boundary test injects a

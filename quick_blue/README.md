@@ -57,8 +57,10 @@ rules. This package README remains a package-level introduction and usage guide.
 ## Install
 
 Android's availability query uses the [Pigeon native-interop preview](../docs/android.md#native-interop-preview)
-with engine-specific registration and the same public Future API. Async BLE
-operations and events remain on engine-scoped channels. Darwin native interop is
+with engine-specific registration and the same public Future API. Fresh calls
+recover after same-engine plugin reattachment; registered worker isolates use
+their engine's channel messenger. Async BLE operations and events remain on
+engine-scoped channels. Darwin native interop is
 deferred; Linux, Windows and Web retain their existing transports.
 
 Install this fork from Git. Override every federated package so Dart does not

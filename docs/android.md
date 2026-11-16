@@ -55,10 +55,18 @@ ID, with an engine-unique instance name, and unregisters the same plugin instanc
 before native detach cleanup. Dart resolves lazily after plugin registration.
 Names matter: Pigeon's default resolver can select another engine when an exact
 registration is missing. Quick Blue does not use that shared default name.
-Missing named registrations fail instead of silently borrowing a peer; resolved
-handles fail with `unregistered-instance` after detach. Availability is supported
-from Flutter engine root isolates, including background Flutter engines, not
-unassociated worker isolates.[^native-client]
+Missing named registrations and detached native handles fail with the structured
+`PlatformException` code `unregistered-instance`, rather than borrowing a peer.
+Each public query resolves the current registration afresh, so the existing
+public singleton recovers after plugin reattachment on the same live engine;
+previously retained generated native handles remain invalid. Engine root
+isolates, including background Flutter engines, use synchronous JNI. A worker
+isolate initialized with `BackgroundIsolateBinaryMessenger.ensureInitialized`
+and its root's `RootIsolateToken` uses the original asynchronous HostApi channel
+through that engine's messenger instead. Availability needs no incoming Dart
+callback registration. An unassociated worker has no supported platform
+messenger. This fallback applies only to this read-only query, never to
+side-effectful BLE operations.[^native-client]
 
 Darwin retains its existing channel transport. Full native-interop adoption is
 deferred: asynchronous callback shutdown requires explicit lifetime handling,

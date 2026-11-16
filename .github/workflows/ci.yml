@@ -595,8 +595,10 @@ jobs:
           test "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1
           repo="$PWD"
           plugin=quick_blue/android/src/main/kotlin/com/example/quick_blue/QuickBluePlugin.kt
+          adapter=quick_blue/lib/src/quick_blue_android.dart
           cp "$plugin" "$RUNNER_TEMP/QuickBluePlugin.kt"
-          trap 'cp "$RUNNER_TEMP/QuickBluePlugin.kt" "$repo/$plugin"; kill "$emulator_pid" || true' EXIT
+          cp "$adapter" "$RUNNER_TEMP/quick_blue_android.dart"
+          trap 'cp "$RUNNER_TEMP/QuickBluePlugin.kt" "$repo/$plugin"; cp "$RUNNER_TEMP/quick_blue_android.dart" "$repo/$adapter"; kill "$emulator_pid" || true' EXIT
           # Negative control: the shipped channel-only host cannot satisfy JNI.
           git fetch --no-tags origin 6a21f931a50e21face1c38615ea493358864a4a3
           git show 6a21f931a50e21face1c38615ea493358864a4a3:"$plugin" > "$plugin"
@@ -608,6 +610,15 @@ jobs:
           grep -F 'No instance named quick_blue.availability.' ../../native-negative-control.log
           cp "$RUNNER_TEMP/QuickBluePlugin.kt" "$repo/$plugin"
           git -C "$repo" diff --exit-code
+          # Characterize the original public worker API, not merely the channel.
+          git -C "$repo" show 6a21f931a50e21face1c38615ea493358864a4a3:"$adapter" > "$repo/$adapter"
+          if flutter test integration_test/native_availability_test.dart -d emulator-5554 --plain-name 'worker isolate retains engine channel availability' --reporter expanded > ../../worker-baseline.log 2>&1; then
+            echo 'Original public worker API unexpectedly passed characterization' >&2
+            exit 1
+          fi
+          grep -F 'Background isolates do not support setMessageHandler()' ../../worker-baseline.log
+          cp "$RUNNER_TEMP/quick_blue_android.dart" "$repo/$adapter"
+          git -C "$repo" diff --exit-code
           flutter test integration_test/native_availability_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee ../../native-interop.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -616,4 +627,5 @@ jobs:
           path: |
             emulator.log
             native-negative-control.log
+            worker-baseline.log
             native-interop.log

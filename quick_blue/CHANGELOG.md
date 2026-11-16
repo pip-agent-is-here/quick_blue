@@ -23,6 +23,10 @@
   Dart 3.13 acceptance and the Flutter-free core/interface/Linux graph.
   Pin Pigeon 30.0.2, JNI 1.1.1 and JNIgen 1.0.1. Android availability uses
   synchronous native interop with engine-unique names and detach invalidation;
+  fresh public calls recover after same-engine plugin reattachment, retained
+  native handles stay invalid, and missing registration produces a structured
+  `unregistered-instance` PlatformException. Registered worker isolates use the
+  original engine-scoped availability channel without installing Dart callbacks;
   the public Future API is unchanged. This is a bounded preview adoption, not
   an asynchronous BLE/event transport migration. Darwin retains channels while
   native callback shutdown and macOS detach safety remain unresolved.

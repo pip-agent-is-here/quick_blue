@@ -49,23 +49,36 @@ void main() {
     var primaryDetached = false;
     try {
       await _control.invokeMethod<void>('disablePrimaryHostChannels');
+      // A registered worker must use THIS engine's messenger, not JNI or the
+      // still-live secondary engine when its own channel handler is absent.
+      final token = RootIsolateToken.instance!;
+      final workerFailure = await Isolate.run(() async {
+        BackgroundIsolateBinaryMessenger.ensureInitialized(token);
+        try {
+          await QuickBlueAndroid().isBluetoothAvailable();
+          return 'unexpected-success';
+        } on PlatformException catch (error) {
+          return error.code;
+        }
+      }).timeout(const Duration(seconds: 30));
+      expect(workerFailure, 'channel-error');
       final primary = QuickBluePlatform.instance;
       final retained = QuickBlueAvailabilityApi.createWithNativeInteropApi(
         messageChannelSuffix:
             'quick_blue.availability.${PlatformDispatcher.instance.engineId}',
       );
-      expect(await primary.isBluetoothAvailable(), isA<bool>());
+      expect(await QuickBlue.isBluetoothAvailable(), isA<bool>());
       expect(
         await callMultiEngineWorker<bool>('isBluetoothAvailable', ''),
         isA<bool>(),
       );
       await stopSecondaryEngine();
-      expect(await primary.isBluetoothAvailable(), isA<bool>());
+      expect(await QuickBlue.isBluetoothAvailable(), isA<bool>());
       await startSecondaryEngine();
       await _control.invokeMethod<void>('detachPrimaryPlugin');
       primaryDetached = true;
       await expectLater(
-        primary.isBluetoothAvailable(),
+        QuickBlue.isBluetoothAvailable(),
         throwsA(
           isA<PlatformException>().having(
             (error) => error.code,
@@ -101,8 +114,9 @@ void main() {
       await _control.invokeMethod<void>('attachPrimaryPlugin');
       primaryDetached = false;
       // Same registered public singleton, same engine, new native registration.
+      expect(QuickBluePlatform.instance, same(primary));
       await _control.invokeMethod<void>('disablePrimaryHostChannels');
-      expect(await primary.isBluetoothAvailable(), isA<bool>());
+      expect(await QuickBlue.isBluetoothAvailable(), isA<bool>());
       await expectLater(
         retained.isBluetoothAvailable(),
         throwsA(
