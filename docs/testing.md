@@ -83,8 +83,9 @@ structured public missing-registration errors and missing-name peer isolation.
 It reattaches the plugin on the same engine and requires the unchanged public
 singleton to recover using JNI while retained generated handles remain stale.
 A registered worker first compares the actual generated engine channel with the
-public availability result; removing that engine's channel while a peer stays
-live must yield `channel-error`, never a peer JNI result. The original public
+public availability result; a primary-engine-only structured channel error must
+reach that worker while a peer's query still succeeds, never returning a peer
+JNI result. The original public
 adapter is replayed separately: its unconditional incoming-callback setup fails
 in a worker even though the original generated request/reply channel succeeds.
 That baseline failure is characterization, not a claim of prior public worker

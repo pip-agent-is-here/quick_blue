@@ -6,6 +6,7 @@ import com.example.quick_blue.QuickBlueApi
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.BasicMessageChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -26,6 +27,16 @@ internal class MultiEngineTestHarness(private val context: Context) : EngineTest
 
     private fun handleControlCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "rejectPrimaryAvailabilityChannel" -> {
+                BasicMessageChannel<Any?>(
+                    primaryEngine.dartExecutor.binaryMessenger,
+                    "dev.flutter.pigeon.quick_blue.QuickBlueApi.isBluetoothAvailable",
+                    QuickBlueApi.codec,
+                ).setMessageHandler { _, reply ->
+                    reply.reply(listOf("primary-engine-only", "Primary engine channel sentinel", null))
+                }
+                result.success(null)
+            }
             "disablePrimaryHostChannels" -> {
                 QuickBlueApi.setUp(primaryEngine.dartExecutor.binaryMessenger, null)
                 result.success(null)

@@ -49,8 +49,15 @@ void main() {
     var primaryDetached = false;
     try {
       await _control.invokeMethod<void>('disablePrimaryHostChannels');
-      // A registered worker must use THIS engine's messenger, not JNI or the
-      // still-live secondary engine when its own channel handler is absent.
+      final primary = QuickBluePlatform.instance;
+      final retained = QuickBlueAvailabilityApi.createWithNativeInteropApi(
+        messageChannelSuffix:
+            'quick_blue.availability.${PlatformDispatcher.instance.engineId}',
+      );
+      expect(await QuickBlue.isBluetoothAvailable(), isA<bool>());
+      await _control.invokeMethod<void>('rejectPrimaryAvailabilityChannel');
+      // A registered worker must observe THIS engine's structured sentinel,
+      // never JNI or the still-live secondary engine's successful result.
       final token = RootIsolateToken.instance!;
       final workerFailure = await Isolate.run(() async {
         BackgroundIsolateBinaryMessenger.ensureInitialized(token);
@@ -61,12 +68,8 @@ void main() {
           return error.code;
         }
       }).timeout(const Duration(seconds: 30));
-      expect(workerFailure, 'channel-error');
-      final primary = QuickBluePlatform.instance;
-      final retained = QuickBlueAvailabilityApi.createWithNativeInteropApi(
-        messageChannelSuffix:
-            'quick_blue.availability.${PlatformDispatcher.instance.engineId}',
-      );
+      expect(workerFailure, 'primary-engine-only');
+      await _control.invokeMethod<void>('disablePrimaryHostChannels');
       expect(await QuickBlue.isBluetoothAvailable(), isA<bool>());
       expect(
         await callMultiEngineWorker<bool>('isBluetoothAvailable', ''),
