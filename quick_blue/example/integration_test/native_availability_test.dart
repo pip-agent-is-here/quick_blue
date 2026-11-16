@@ -74,6 +74,18 @@ void main() {
           ),
         ),
       );
+      // Resolution-time absence must have the same structured failure as a
+      // stale handle, even while another engine still has a registration.
+      await expectLater(
+        QuickBlueAndroid().isBluetoothAvailable(),
+        throwsA(
+          isA<PlatformException>().having(
+            (error) => error.code,
+            'code',
+            'unregistered-instance',
+          ),
+        ),
+      );
       // A new lookup must not borrow the still-running secondary engine.
       expect(
         () => QuickBlueAvailabilityApi.createWithNativeInteropApi(

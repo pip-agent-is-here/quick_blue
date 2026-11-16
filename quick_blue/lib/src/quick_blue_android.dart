@@ -14,7 +14,9 @@ class QuickBlueAndroid extends QuickBluePlatform {
     : _providedAvailabilityApi = availabilityApi;
 
   final QuickBlueAvailabilityApi? _providedAvailabilityApi;
-  late final QuickBlueAvailabilityApi? _availabilityApi =
+  // Resolve per public query: a plugin can detach and reattach on a live engine.
+  // Retaining a generated native wrapper would retain the retired registration.
+  QuickBlueAvailabilityApi? get _availabilityApi =>
       _providedAvailabilityApi ?? createNativeAvailabilityApi();
 
   final messages.QuickBlueApi _api = messages.QuickBlueApi();
@@ -185,8 +187,8 @@ class QuickBlueAndroid extends QuickBluePlatform {
 
   @override
   Future<bool> isBluetoothAvailable() async {
-    _ensureInitialized();
-
+    // This request has no Dart callbacks. Installing FlutterApi handlers would
+    // reject a registered background-isolate messenger before it can send.
     final availability = _availabilityApi;
     return availability != null
         ? availability.isBluetoothAvailable()

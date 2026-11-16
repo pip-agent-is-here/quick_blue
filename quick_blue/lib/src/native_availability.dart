@@ -7,11 +7,9 @@ import 'availability.g.dart';
 QuickBlueAvailabilityApi? createNativeAvailabilityApi() {
   if (!Platform.isAndroid) return null;
   final engineId = PlatformDispatcher.instance.engineId;
-  if (engineId == null) {
-    throw UnsupportedError(
-      'Quick Blue native availability requires a Flutter engine root isolate.',
-    );
-  }
+  // BackgroundIsolateBinaryMessenger routes to its registering root engine.
+  // A worker has no native engine ID; never invoke JNI's latest-engine fallback.
+  if (engineId == null) return null;
   // Never use the preview resolver's default/latest-engine fallback.
   return QuickBlueAvailabilityApi.createWithNativeInteropApi(
     messageChannelSuffix: 'quick_blue.availability.$engineId',
