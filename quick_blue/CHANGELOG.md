@@ -8,6 +8,13 @@
 - Verify external Linux generated registration at runtime and reject Flutter
   plugin metadata in standalone graphs. Restore Linux's plugin-metadata dry-run
   validation without disabling version/changelog checks. Distribution remains Git/local.
+- Classify Android GATT failures on a lost link. A read, write or notification
+  update that fails after, or within one second before, the disconnect event
+  carries `remoteDisconnected`; the wait applies to native statuses 8, 19 and
+  133 only. Operations rejected with native `Disconnected` become typed
+  `QuickBlueException`s. `disconnect()` for a device the engine no longer holds
+  completes with a disconnected event and no longer throws `IllegalArgument`.
+
 - Add a federated Web Bluetooth backend with a direct-gesture `requestDevice`
   chooser, authorized GATT discovery/read/write/notifications, bounded waits and
   stale-session fencing. Native scanning, bonding, MTU and L2CAP remain unsupported
