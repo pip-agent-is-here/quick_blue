@@ -4,6 +4,13 @@
   ownership, so delayed old disconnect delivery cannot clear a replacement repair.
   Add a held-close regression using actual broker/plugin/observer code over mocked
   Android IO; physical Android 17 repair remains unverified.
+- Classify Android GATT failures on a lost link. A read, write or notification
+  update that fails after, or within one second before, the disconnect event
+  carries `remoteDisconnected`; the wait applies to native statuses 8, 19 and
+  133 only. Operations rejected with native `Disconnected` become typed
+  `QuickBlueException`s. `disconnect()` for a device the engine no longer holds
+  completes with a disconnected event and no longer throws `IllegalArgument`.
+
 - Add a federated Web Bluetooth backend with a direct-gesture `requestDevice`
   chooser, authorized GATT discovery/read/write/notifications, bounded waits and
   stale-session fencing. Native scanning, bonding, MTU and L2CAP remain unsupported

@@ -237,7 +237,9 @@ Each source is `pigeons/messages.dart` relative to its owning package:
 `RepairBrokerRetirementTest` runs the actual broker, plugin lifecycle hooks and
 repair observer with Mockito Android IO. It reconnects synchronously inside the
 retiring GATT's held `close`, keeps main-thread delivery queued, rejects duplicate
-old callbacks and checks current retirement. Run it with the Android Kotlin
+old callbacks and checks current retirement. Its unknown-client control confirms a disconnected
+reply without retiring a held peer's repair observation; a held-client disconnect
+still retires observation before detach. Run it with the Android Kotlin
 Gradle command above (optionally `--tests '*RepairBrokerRetirementTest'`). This is
 a deterministic lifetime seam, not physical disconnect scheduling or API 37 repair.
 

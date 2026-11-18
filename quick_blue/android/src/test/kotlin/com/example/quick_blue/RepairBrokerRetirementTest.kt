@@ -110,6 +110,38 @@ class RepairBrokerRetirementTest {
         }
     }
 
+    @Test fun `unknown client disconnect confirms state without retiring held peer`() {
+        val deviceId = "retirement-unknown-test"
+        val device = mock(BluetoothDevice::class.java)
+        val context = mock(Context::class.java)
+        val gatt = mock(BluetoothGatt::class.java)
+        val observer = AndroidRepairObserver()
+        val held = plugin(deviceId, observer)
+        val unknown = mock(AndroidGattClient::class.java)
+        `when`(device.address).thenReturn(deviceId)
+        `when`(gatt.device).thenReturn(device)
+        `when`(device.connectGatt(any(Context::class.java), anyBoolean(),
+            any(BluetoothGattCallback::class.java), anyInt())).thenReturn(gatt)
+        try {
+            AndroidGattBroker.connect(held, context, device)
+            observer.dispatch(37, deviceId, RepairBroadcast.PAIRING_REQUEST,
+                RepairBroadcast.REPAIRING, RepairBroadcast.LE, 0, true)
+            val token = observer.connectionToken(deviceId)
+            assertTrue(AndroidGattBroker.disconnect(unknown, deviceId).isEmpty())
+            verify(unknown).emitConnectionState(deviceId, PlatformConnectionState.DISCONNECTED,
+                PlatformGattStatus.SUCCESS, BluetoothGatt.GATT_SUCCESS)
+            verify(unknown, never()).retireGattConnection(deviceId)
+            assertEquals(token, observer.connectionToken(deviceId))
+            assertEquals(PlatformRepairState.IN_PROGRESS, observer.snapshot(deviceId).state)
+            verify(gatt, never()).disconnect()
+            verify(gatt, never()).close()
+            AndroidGattBroker.disconnect(held, deviceId)
+            assertNull(observer.connectionToken(deviceId))
+        } finally {
+            AndroidGattBroker.detach(held)
+        }
+    }
+
     private fun plugin(deviceId: String, observer: AndroidRepairObserver): QuickBluePlugin {
         // No Flutter engine is constructed. Run real plugin methods while mocking
         // only Android IO and stream closure unrelated to repair observation.
