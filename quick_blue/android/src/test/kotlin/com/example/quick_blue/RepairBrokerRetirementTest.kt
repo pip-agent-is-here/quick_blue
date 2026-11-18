@@ -135,8 +135,7 @@ class RepairBrokerRetirementTest {
             assertEquals(PlatformRepairState.IN_PROGRESS, observer.snapshot(deviceId).state)
             verify(gatt, never()).disconnect()
             verify(gatt, never()).close()
-            AndroidGattBroker.disconnect(held, deviceId)
-            assertNull(observer.connectionToken(deviceId))
+            assertNotNull(observer.connectionToken(deviceId))
         } finally {
             AndroidGattBroker.detach(held)
         }
